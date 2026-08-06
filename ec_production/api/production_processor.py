@@ -296,6 +296,29 @@ def stop_job_timer(
     if jc.docstatus == 2:
         frappe.throw(_("Job Card is Cancelled."))
 
+    if qty >= flt(jc.for_quantity):
+        return stop_time_and_submit(
+            jc,
+            qty,
+            process_loss_qty,
+            pending_qty,
+            sub_operation,
+        )
+
+    return stop_and_create_duplicate(
+        jc,
+        qty,
+        process_loss_qty,
+        sub_operation,
+    )
+
+def stop_time_and_submit(
+    jc,
+    qty,
+    process_loss_qty=0,
+    pending_qty=None,
+    sub_operation=None,
+):
     if pending_qty is None:
         pending_qty = max(0, flt(jc.pending_qty) - qty)
 
@@ -311,4 +334,103 @@ def stop_job_timer(
 
     jc.reload()
 
-    return jc.name
+    return {
+        "completed_job_card": jc.name,
+    }
+
+
+def stop_and_create_duplicate(
+    jc,
+    qty,
+    process_loss_qty=0,
+    sub_operation=None,
+):
+    original_qty = flt(jc.for_quantity)
+    remaining_qty = original_qty - flt(qty)
+
+    jc = complete_partial_job_card(
+        jc,
+        qty,
+        process_loss_qty,
+        sub_operation,
+    )
+
+    new_jc = create_remaining_job_card(jc, remaining_qty)
+
+    return {
+        "completed_job_card": jc.name,
+        "new_job_card": new_jc.name,
+    }
+
+
+def complete_partial_job_card(
+    jc,
+    qty,
+    process_loss_qty=0,
+    sub_operation=None,
+):
+    qty = flt(qty)
+    original_qty = flt(jc.for_quantity)
+
+    # Reduce Job Card quantity
+    jc.for_quantity = qty
+    jc.pending_qty = 0
+
+    if original_qty:
+        jc.time_required = (flt(jc.time_required) / original_qty) * qty
+
+    jc.save(ignore_permissions=True)
+
+    # Complete Job Card
+    jc.complete_job_card(
+        qty=qty,
+        for_quantity=qty,
+        pending_qty=0,
+        process_loss_qty=process_loss_qty,
+        end_time=now_datetime(),
+        sub_operation=sub_operation,
+        auto_submit=True,
+    )
+
+    jc.reload()
+
+    return jc
+
+def create_remaining_job_card(jc, remaining_qty):
+    qty = flt(jc.for_quantity)
+
+    new_jc = frappe.copy_doc(jc)
+
+    new_jc.name = None
+    new_jc.amended_from = None
+    new_jc.docstatus = 0
+    new_jc.status = "Open"
+
+    # Remaining quantity
+    new_jc.for_quantity = remaining_qty
+    new_jc.pending_qty = remaining_qty
+
+    # Reset production values
+    new_jc.total_completed_qty = 0
+    new_jc.process_loss_qty = 0
+    new_jc.manufactured_qty = 0
+    new_jc.transferred_qty = 0
+
+    # Reset dates
+    new_jc.actual_start_date = None
+    new_jc.actual_end_date = None
+
+    # Scale estimated time
+    if qty:
+        new_jc.time_required = (flt(jc.time_required) / qty) * remaining_qty
+
+    new_jc.total_time_in_mins = 0
+
+    # Remove production history
+    new_jc.time_logs = []
+    new_jc.scheduled_time_logs = []
+
+    new_jc.insert(ignore_permissions=True)
+
+    return new_jc
+

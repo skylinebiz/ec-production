@@ -24,19 +24,6 @@ class ProductionProcessor {
 		this.bind_events();
 	}
 
-	// constructor(page) {
-	// 	this.page = page;
-
-	// 	this.wrapper = $(`
-	// 		<div class="production-processor container-fluid py-4"></div>
-	// 	`).appendTo(this.page.body);
-
-	// 	this.make_filters();
-	// 	this.make_dashboard();
-	// 	this.make_employee_section();
-	// 	this.make_table();
-	// }
-
 	make_filters() {
 		let row = $(`
 			<div class="row g-3 align-items-center mb-4">
@@ -316,7 +303,7 @@ class ProductionProcessor {
 			const tr = $(`
 			<tr>
 
-				<td class="text-center align-middle" >${row.job_card}</td>
+				<td class="text-center align-middle" >${row.job_card} (${row.operation}) </td>
 
 				<td class="text-center align-middle" >${row.work_order}</td>
 
