@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, flt
+from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
 
 @frappe.whitelist()
 def load_data(production_plan, operation=None):
@@ -305,13 +306,14 @@ def stop_job_timer(
             sub_operation,
         )
 
-    return stop_and_create_duplicate(
+    return stop_and_split_job_card(
         jc,
         qty,
         process_loss_qty,
         sub_operation,
     )
 
+# Case 1 : for qty = recd qty
 def stop_time_and_submit(
     jc,
     qty,
@@ -322,9 +324,60 @@ def stop_time_and_submit(
     if pending_qty is None:
         pending_qty = max(0, flt(jc.pending_qty) - qty)
 
+    complete_job_card(
+        jc,
+        qty=qty,
+        pending_qty=pending_qty,
+        process_loss_qty=process_loss_qty,
+        sub_operation=sub_operation,
+    )
+
+    return {
+        "completed_job_card": jc.name,
+    }
+
+
+# Case 2 for qty > recd qty
+def stop_and_split_job_card(
+    jc,
+    qty,
+    process_loss_qty=0,
+    sub_operation=None,
+):
+    original_qty = flt(jc.for_quantity)
+    remaining_qty = original_qty - qty
+
+    scale_job_card_quantity(jc, qty)
+
+    complete_job_card(
+        jc,
+        qty=qty,
+        pending_qty=0,
+        process_loss_qty=process_loss_qty,
+        sub_operation=sub_operation,
+    )
+
+    new_jc = duplicate_job_card(jc, remaining_qty)
+
+    return {
+        "completed_job_card": jc.name,
+        "new_job_card": new_jc.name,
+    }
+
+
+# Helpers
+
+# Completing job for recd qty 
+def complete_job_card(
+    jc,
+    qty,
+    pending_qty,
+    process_loss_qty,
+    sub_operation=None,
+):
     jc.complete_job_card(
         qty=qty,
-        for_quantity=qty + process_loss_qty + pending_qty,
+        for_quantity=qty + pending_qty + process_loss_qty,
         pending_qty=pending_qty,
         process_loss_qty=process_loss_qty,
         end_time=now_datetime(),
@@ -334,103 +387,182 @@ def stop_time_and_submit(
 
     jc.reload()
 
-    return {
-        "completed_job_card": jc.name,
-    }
-
-
-def stop_and_create_duplicate(
-    jc,
-    qty,
-    process_loss_qty=0,
-    sub_operation=None,
-):
-    original_qty = flt(jc.for_quantity)
-    remaining_qty = original_qty - flt(qty)
-
-    jc = complete_partial_job_card(
-        jc,
-        qty,
-        process_loss_qty,
-        sub_operation,
-    )
-
-    new_jc = create_remaining_job_card(jc, remaining_qty)
-
-    return {
-        "completed_job_card": jc.name,
-        "new_job_card": new_jc.name,
-    }
-
-
-def complete_partial_job_card(
-    jc,
-    qty,
-    process_loss_qty=0,
-    sub_operation=None,
-):
-    qty = flt(qty)
-    original_qty = flt(jc.for_quantity)
-
-    # Reduce Job Card quantity
-    jc.for_quantity = qty
-    jc.pending_qty = 0
-
-    if original_qty:
-        jc.time_required = (flt(jc.time_required) / original_qty) * qty
-
-    jc.save(ignore_permissions=True)
-
-    # Complete Job Card
-    jc.complete_job_card(
-        qty=qty,
-        for_quantity=qty,
-        pending_qty=0,
-        process_loss_qty=process_loss_qty,
-        end_time=now_datetime(),
-        sub_operation=sub_operation,
-        auto_submit=True,
-    )
-
-    jc.reload()
+    create_stock_entry_if_all_operations_complete(jc)
 
     return jc
 
-def create_remaining_job_card(jc, remaining_qty):
-    qty = flt(jc.for_quantity)
+
+def scale_job_card_quantity(jc, new_qty):
+    original_qty = flt(jc.for_quantity)
+
+    if original_qty:
+        jc.time_required = (
+            flt(jc.time_required) / original_qty
+        ) * new_qty
+
+    jc.for_quantity = new_qty
+    jc.pending_qty = 0
+
+    jc.save(ignore_permissions=True)
+
+
+# Creating job card with remaining qty
+def duplicate_job_card(jc, qty):
+    source_qty = flt(jc.for_quantity)
 
     new_jc = frappe.copy_doc(jc)
 
-    new_jc.name = None
-    new_jc.amended_from = None
-    new_jc.docstatus = 0
-    new_jc.status = "Open"
+    reset_job_card(new_jc)
 
-    # Remaining quantity
-    new_jc.for_quantity = remaining_qty
-    new_jc.pending_qty = remaining_qty
+    new_jc.for_quantity = qty
+    new_jc.pending_qty = qty
 
-    # Reset production values
-    new_jc.total_completed_qty = 0
-    new_jc.process_loss_qty = 0
-    new_jc.manufactured_qty = 0
-    new_jc.transferred_qty = 0
-
-    # Reset dates
-    new_jc.actual_start_date = None
-    new_jc.actual_end_date = None
-
-    # Scale estimated time
-    if qty:
-        new_jc.time_required = (flt(jc.time_required) / qty) * remaining_qty
-
-    new_jc.total_time_in_mins = 0
-
-    # Remove production history
-    new_jc.time_logs = []
-    new_jc.scheduled_time_logs = []
+    if source_qty:
+        new_jc.time_required = (
+            flt(jc.time_required) / source_qty
+        ) * qty
 
     new_jc.insert(ignore_permissions=True)
 
     return new_jc
 
+
+def reset_job_card(jc):
+    jc.name = None
+    jc.amended_from = None
+    jc.docstatus = 0
+    jc.status = "Open"
+
+    jc.total_completed_qty = 0
+    jc.process_loss_qty = 0
+    jc.manufactured_qty = 0
+    jc.transferred_qty = 0
+    jc.total_time_in_mins = 0
+
+    jc.actual_start_date = None
+    jc.actual_end_date = None
+
+    jc.time_logs = []
+    jc.scheduled_time_logs = []
+
+
+def create_stock_entry_if_last_operation(job_card):
+    if not job_card.work_order:
+        return
+
+    work_order = frappe.get_doc("Work Order", job_card.work_order)
+
+    # Get all operations from the Work Order
+    operations = frappe.get_all(
+        "Work Order Operation",
+        filters={
+            "parent": work_order.name,
+            "parenttype": "Work Order",
+        },
+        fields=["name", "operation", "sequence_id"],
+        order_by="sequence_id asc",
+    )
+
+    if not operations:
+        return
+
+    # Check every operation
+    for operation in operations:
+
+        # Find submitted Job Cards for this operation
+        job_cards = frappe.get_all(
+            "Job Card",
+            filters={
+                "work_order": work_order.name,
+                "operation": operation.operation,
+                "docstatus": 1,
+            },
+            fields=["name", "status"],
+        )
+
+        # No Job Card completed for this operation
+        if not job_cards:
+            return
+
+        # At least one Job Card for this operation is not completed
+        if any(jc.status != "Completed" for jc in job_cards):
+            return
+
+    # All Work Order operations are completed
+    # Prevent duplicate Stock Entry
+    if frappe.db.exists(
+        "Stock Entry",
+        {
+            "work_order": work_order.name,
+            "stock_entry_type": "Material Transfer for Manufacture",
+            "docstatus": 1,
+        },
+    ):
+        return
+
+    # Create Stock Entry
+    stock_entry = work_order.make_stock_entry(
+        purpose="Material Transfer for Manufacture"
+    )
+
+    stock_entry.insert(ignore_permissions=True)
+    stock_entry.submit()
+
+    return stock_entry
+
+
+def create_stock_entry_if_all_operations_complete(job_card):
+    if not job_card.work_order:
+        return
+
+    work_order = frappe.get_doc("Work Order", job_card.work_order)
+
+    if work_order.docstatus != 1:
+        return
+
+    if not work_order.operations:
+        return
+
+    # Make sure operation statuses are calculated using ERPNext logic
+    work_order.update_operation_status()
+
+    # Every operation must be completed
+    if not all(
+        operation.status == "Completed"
+        for operation in work_order.operations
+    ):
+        return
+
+    # Already fully produced
+    if flt(work_order.produced_qty) >= flt(work_order.qty):
+        return
+
+    # Remaining quantity
+    remaining_qty = flt(work_order.qty) - flt(work_order.produced_qty)
+
+    if remaining_qty <= 0:
+        return
+
+    # Prevent duplicate Manufacture Stock Entry
+    if frappe.db.exists(
+        "Stock Entry",
+        {
+            "work_order": work_order.name,
+            "purpose": "Manufacture",
+            "docstatus": 1,
+        },
+    ):
+        return
+
+    stock_entry_data = make_stock_entry(
+        work_order_id=work_order.name,
+        purpose="Manufacture",
+        qty=remaining_qty,
+    )
+
+    stock_entry = frappe.get_doc(stock_entry_data)
+
+    stock_entry.insert(ignore_permissions=True)
+    stock_entry.submit()
+
+    return stock_entry

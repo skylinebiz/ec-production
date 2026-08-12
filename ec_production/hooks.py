@@ -57,6 +57,10 @@ app_license = "mit"
 #     "Purchase Receipt": "public/js/advanced_item_search.js",
 # }
 
+doctype_js = {
+    "Production Plan": "public/js/production_plan.js"
+}
+
 # doctype_list_js = {
 #     "Item": "public/js/item_list.js",
 # }

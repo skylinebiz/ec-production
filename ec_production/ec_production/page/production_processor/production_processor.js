@@ -111,14 +111,15 @@ class ProductionProcessor {
 
 			summary[row.item_name].qty += flt(row.for_quantity);
 			summary[row.item_name].completed += flt(row.total_completed_qty);
-			summary[row.item_name].pending += flt(row.pending_qty);
 
 		});
 
 		Object.values(summary).forEach(item => {
+
+			item.pending = Math.max(0, item.qty - item.completed);
+
 			this.add_card(item);
 		});
-
 	}
 
 
@@ -283,13 +284,28 @@ class ProductionProcessor {
 
 	render_table(rows) {
 
+		const status_order = {
+			"Work In Progress": 1,
+			"Open": 2,        // displayed as Ready
+			"On Hold": 3,
+			"Completed": 4,
+			"Cancelled": 5
+		};
+
+		rows.sort((a, b) => {
+			return (
+				(status_order[a.status] || 99) -
+				(status_order[b.status] || 99)
+			);
+		});
+
 		this.tbody.empty();
 
 		if (!rows.length) {
 
 			this.tbody.append(`
 			<tr>
-				<td colspan="7" class="text-center text-muted py-5">
+				<td colspan="8" class="text-center text-muted py-5">
 					No Job Cards Found
 				</td>
 			</tr>
@@ -303,21 +319,27 @@ class ProductionProcessor {
 			const tr = $(`
 			<tr>
 
-				<td class="text-center align-middle" >${row.job_card} (${row.operation}) </td>
+				<td class="text-center align-middle">
+					${row.job_card} (${row.operation})
+				</td>
 
-				<td class="text-center align-middle" >${row.work_order}</td>
+				<td class="text-center align-middle">
+					${row.work_order}
+				</td>
 
-				<td class="text-center align-middle">${row.item_name}</td>
+				<td class="text-center align-middle">
+					${row.item_name}
+				</td>
 
 				<td class="employee-cell"></td>
 
-				<td class="text-center align-middle" >
+				<td class="text-center align-middle">
 					${frappe.format(row.for_quantity, {
 				fieldtype: "Float"
 			})}
 				</td>
 
-				<td class=" text-center align-middle received-qty-cell"></td>	
+				<td class="text-center align-middle received-qty-cell"></td>
 
 				<td class="text-center align-middle">
 					${this.render_status(row)}
@@ -346,7 +368,6 @@ class ProductionProcessor {
 			);
 
 		});
-
 	}
 
 	render_status(row) {
@@ -367,11 +388,19 @@ class ProductionProcessor {
 				icon: "🟡",
 				text: "Ready"
 			},
+
+			"On Hold": {
+				color: "secondary",
+				icon: "🟣",
+				text: "On Hold"
+			},
+
 			"Completed": {
 				color: "success",
 				icon: "🟢",
 				text: "Completed"
 			},
+
 			"Cancelled": {
 				color: "danger",
 				icon: "🔴",
