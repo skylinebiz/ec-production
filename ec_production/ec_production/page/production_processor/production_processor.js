@@ -1209,145 +1209,6 @@ class ProductionProcessor {
 
 		});
 
-
-		// Create Stock Entry buttons
-		// wrapper
-		// 	.find(".create-rm-stock-entry")
-		// 	.on("click", (e) => {
-
-		// 		e.preventDefault();
-		// 		e.stopPropagation();
-
-		// 		const index = $(e.currentTarget).data("index");
-		// 		const item = rm_items[index];
-
-		// 		if (!item) {
-		// 			frappe.msgprint(__("Unable to find selected RM item."));
-		// 			return;
-		// 		}
-
-		// 		if (!item.work_order) {
-		// 			frappe.msgprint(__("Work Order is required."));
-		// 			return;
-		// 		}
-
-		// 		frappe.call({
-		// 			method:
-		// 				"erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry",
-
-		// 			args: {
-		// 				work_order_id: item.work_order,
-		// 				purpose: "Manufacture",
-		// 				qty: item.job_qty || 1
-		// 			},
-
-		// 			freeze: true,
-		// 			freeze_message: __("Preparing Stock Entry..."),
-
-		// 			callback: (r) => {
-
-		// 				if (!r.message) {
-		// 					frappe.msgprint(
-		// 						__("Unable to create Stock Entry.")
-		// 					);
-		// 					return;
-		// 				}
-
-		// 				const stock_entry = r.message;
-
-		// 				stock_entry.__islocal = 1;
-		// 				stock_entry.docstatus = 0;
-
-		// 				frappe.model.sync(stock_entry);
-
-		// 				// frappe.set_route(
-		// 				// 	"Form",
-		// 				// 	"Stock Entry",
-		// 				// 	stock_entry.name
-		// 				// );
-		// 				const url = frappe.urllib.get_full_url(
-		// 					`/app/stock-entry/${encodeURIComponent(stock_entry.name)}`
-		// 				);
-
-		// 				window.open(url, "_blank");
-		// 			}
-		// 		});
-		// 	});
-
-		// wrapper
-		// 	.find(".create-rm-stock-entry")
-		// 	.on("click", (e) => {
-
-		// 		e.preventDefault();
-		// 		e.stopPropagation();
-
-		// 		const index = $(e.currentTarget).data("index");
-		// 		const item = rm_items[index];
-
-		// 		if (!item) {
-		// 			frappe.msgprint(
-		// 				__("Unable to find selected RM item.")
-		// 			);
-		// 			return;
-		// 		}
-
-		// 		if (!item.job_card) {
-		// 			frappe.msgprint(
-		// 				__("Job Card is required.")
-		// 			);
-		// 			return;
-		// 		}
-
-		// 		if (!item.job_qty || item.job_qty <= 0) {
-		// 			frappe.msgprint(
-		// 				__("Job Qty must be greater than zero.")
-		// 			);
-		// 			return;
-		// 		}
-
-		// 		// Remember selected Job Card for the next stages.
-		// 		this.selected_rm_item = item;
-
-		// 		frappe.call({
-
-		// 			method:
-		// 				"ec_production.api.prod_plan.issue_rm_for_job_card",
-
-		// 			args: {
-		// 				job_card: item.job_card,
-		// 				qty: item.job_qty
-		// 			},
-
-		// 			freeze: true,
-
-		// 			freeze_message:
-		// 				__("Preparing RM Issue Stock Entry..."),
-
-		// 			callback: (r) => {
-
-		// 				if (!r.message || !r.message.name) {
-
-		// 					frappe.msgprint(
-		// 						__("Unable to create RM Issue Stock Entry.")
-		// 					);
-
-		// 					return;
-		// 				}
-
-		// 				const stock_entry = r.message;
-
-		// 				const url = frappe.urllib.get_full_url(
-		// 					`/app/stock-entry/${encodeURIComponent(
-		// 						stock_entry.name
-		// 					)}`
-		// 				);
-
-		// 				window.open(url, "_blank");
-		// 			}
-		// 		});
-		// 	});
-
-
 		wrapper
 			.find(".create-rm-stock-entry")
 			.on("click", (e) => {
@@ -1363,17 +1224,34 @@ class ProductionProcessor {
 					return;
 				}
 
-				// Create a completely new Stock Entry locally
-				const stock_entry = frappe.model.get_new_doc("Stock Entry");
+				// Native Frappe new document flow
+				frappe.new_doc("Stock Entry", {}, (doc) => {
 
-				stock_entry.stock_entry_type = "Manufacture";
+					// Stock Entry type
+					doc.stock_entry_type = "Material Issue";
 
-				// Open new Stock Entry in a new tab
-				const url = frappe.urllib.get_full_url(
-					`/app/stock-entry/${encodeURIComponent(stock_entry.name)}`
-				);
+					(item.components || []).forEach((component) => {
 
-				window.open(url, "_blank");
+						const row = frappe.model.add_child(
+							doc,
+							"items"
+						);
+
+						row.item_code = component.item_code;
+						row.qty = component.qty;
+						row.uom = component.uom;
+
+					});
+
+					const item_row = frappe.model.add_child(
+						doc,
+						"items"
+					);
+
+					item_row.item_code = item.cut_item_code;
+					item_row.qty = item.job_qty;
+
+				});
 			});
 	}
 
@@ -1651,12 +1529,11 @@ class ProductionProcessor {
 						data-index="${index}"
 						min="0"
 						step="0.001"
-						max="${item.job_qty || 0}"
 						placeholder="${__("Enter Qty")}"
 					>
 
 					<div class="text-muted small mt-1">
-						Max: ${item.job_qty || 0}
+						Qty: ${item.job_qty || 0}
 					</div>
 
 				</td>
@@ -1689,11 +1566,6 @@ class ProductionProcessor {
 
 		wrapper.html(html);
 
-
-		// ---------------------------------------------------------
-		// Process Cuts → Create Stock Entry
-		// ---------------------------------------------------------
-
 		wrapper
 			.find(".create-process-cuts-stock-entry")
 			.on("click", (e) => {
@@ -1701,125 +1573,44 @@ class ProductionProcessor {
 				e.preventDefault();
 				e.stopPropagation();
 
-				const index =
-					$(e.currentTarget).data("index");
-
-				const item =
-					rm_items[index];
+				const index = $(e.currentTarget).data("index");
+				const item = rm_items[index];
 
 				if (!item) {
-
-					frappe.msgprint(
-						__("Unable to find selected RM item.")
-					);
-
+					frappe.msgprint(__("Unable to find selected RM item."));
 					return;
 				}
 
-				if (!item.job_card) {
-
-					frappe.msgprint(
-						__("Job Card is required.")
-					);
-
-					return;
-				}
-
-
-				// Get Qty from THIS row
-				const qty = parseFloat(
-					wrapper
-						.find(
-							`.process-cut-qty[data-index="${index}"]`
-						)
+				// Get user entered quantity
+				const qty = flt(
+					$(e.currentTarget)
+						.closest("tr")
+						.find(".process-cut-qty")
 						.val()
 				);
 
-
-				if (!qty || qty <= 0) {
-
-					frappe.msgprint(
-						__("Please enter a valid quantity.")
-					);
-
+				if (qty <= 0) {
+					frappe.msgprint(__("Please enter a valid quantity."));
 					return;
 				}
 
+				// Create new Stock Entry
+				frappe.new_doc("Stock Entry", {}, (doc) => {
 
-				// Don't allow more than Job Qty
-				if (
-					item.job_qty &&
-					qty > parseFloat(item.job_qty)
-				) {
+					doc.stock_entry_type = "Material Receipt";
 
-					frappe.msgprint(
-						__("Quantity cannot be greater than Job Qty {0}.")
-							.replace(
-								"{0}",
-								item.job_qty
-							)
+					// Add item
+					const row = frappe.model.add_child(
+						doc,
+						"Stock Entry Detail",
+						"items"
 					);
 
-					return;
-				}
-
-
-				frappe.call({
-
-					method:
-						"ec_production.api.prod_plan.process_cut_for_job_card",
-
-					args: {
-
-						job_card: item.job_card,
-
-						qty: qty
-
-					},
-
-					freeze: true,
-
-					freeze_message:
-						__("Preparing Process Cut Stock Entry..."),
-
-					callback: (r) => {
-
-						if (
-							!r.message ||
-							!r.message.name
-						) {
-
-							frappe.msgprint(
-								__(
-									"Unable to create Process Cut Stock Entry."
-								)
-							);
-
-							return;
-						}
-
-
-						const stock_entry =
-							r.message;
-
-
-						const url =
-							frappe.urllib.get_full_url(
-								`/app/stock-entry/${encodeURIComponent(
-									stock_entry.name
-								)}`
-							);
-
-
-						window.open(
-							url,
-							"_blank"
-						);
-
-					}
+					row.item_code = item.cut_item_code;
+					row.item_name = item.cut_item_name;
+					row.qty = qty;
 
 				});
-
 			});
 	}
 
@@ -2032,11 +1823,6 @@ class ProductionProcessor {
 
 		wrapper.html(html);
 
-
-		// ---------------------------------------------------------
-		// RM Receive → Create Stock Entry
-		// ---------------------------------------------------------
-
 		wrapper
 			.find(".create-rm-receive-stock-entry")
 			.on("click", (e) => {
@@ -2044,125 +1830,45 @@ class ProductionProcessor {
 				e.preventDefault();
 				e.stopPropagation();
 
-				const index =
-					$(e.currentTarget).data("index");
-
-				const item =
-					rm_items[index];
+				const index = $(e.currentTarget).data("index");
+				const item = rm_items[index];
 
 				if (!item) {
-
-					frappe.msgprint(
-						__("Unable to find selected RM item.")
-					);
-
+					frappe.msgprint(__("Unable to find selected RM item."));
 					return;
 				}
 
-				if (!item.job_card) {
-
-					frappe.msgprint(
-						__("Job Card is required.")
-					);
-
-					return;
-				}
-
-
-				// Get Qty from THIS row
-				const qty = parseFloat(
-					wrapper
-						.find(
-							`.rm-receive-qty[data-index="${index}"]`
-						)
+				// Get user entered quantity
+				const qty = flt(
+					$(e.currentTarget)
+						.closest("tr")
+						.find(".rm-receive-qty")
 						.val()
 				);
 
-
-				if (!qty || qty <= 0) {
-
-					frappe.msgprint(
-						__("Please enter a valid quantity.")
-					);
-
+				if (qty <= 0) {
+					frappe.msgprint(__("Please enter a valid quantity."));
 					return;
 				}
 
+				// Create new Stock Entry
+				frappe.new_doc("Stock Entry", {}, (doc) => {
 
-				// Don't allow more than Job Qty
-				if (
-					item.job_qty &&
-					qty > parseFloat(item.job_qty)
-				) {
+					doc.stock_entry_type = "Material Receipt";
 
-					frappe.msgprint(
-						__("Quantity cannot be greater than Job Qty {0}.")
-							.replace(
-								"{0}",
-								item.job_qty
-							)
+					// Add item
+					const row = frappe.model.add_child(
+						doc,
+						"Stock Entry Detail",
+						"items"
 					);
 
-					return;
-				}
-
-
-				frappe.call({
-
-					method:
-						"ec_production.api.prod_plan.receive_rm_for_job_card",
-
-					args: {
-
-						job_card: item.job_card,
-
-						qty: qty
-
-					},
-
-					freeze: true,
-
-					freeze_message:
-						__("Preparing RM Receive Stock Entry..."),
-
-					callback: (r) => {
-
-						if (
-							!r.message ||
-							!r.message.name
-						) {
-
-							frappe.msgprint(
-								__(
-									"Unable to create RM Receive Stock Entry."
-								)
-							);
-
-							return;
-						}
-
-
-						const stock_entry =
-							r.message;
-
-
-						const url =
-							frappe.urllib.get_full_url(
-								`/app/stock-entry/${encodeURIComponent(
-									stock_entry.name
-								)}`
-							);
-
-
-						window.open(
-							url,
-							"_blank"
-						);
-
-					}
+					row.item_code = item.cut_item_code;
+					row.item_name = item.cut_item_name;
+					row.qty = qty;
 
 				});
-
 			});
+
 	}
 }
