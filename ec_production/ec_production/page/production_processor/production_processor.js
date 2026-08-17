@@ -239,9 +239,19 @@ class ProductionProcessor {
 		this.table = $(`
 		<div class="card">
 
-			<div class="card-header">
-				<h5 class="mb-0">Job Cards</h5>
-			</div>
+		 <div class="card-header d-flex justify-content-between align-items-center">
+            
+            <span>
+                ${__("Job Cards")}
+            </span>
+
+            <button type="button"
+                class="btn btn-sm btn-primary rm-processing-btn"
+            >
+                ${__("RM Processing")}
+            </button>
+
+        </div>
 
 			<div class="table-responsive" style="overflow:visible;">
 
@@ -251,6 +261,7 @@ class ProductionProcessor {
 
 						<tr>
 							<th class="text-center" style="width:160px">Job Card</th>
+							<th class="text-center" style="width:160px">Operation</th>
 							<th class="text-center" style="width:160px">Work Order</th>
 							<th class="text-center">Item</th>
 							<th class="text-center" style="width:220px">Employee</th>
@@ -320,7 +331,11 @@ class ProductionProcessor {
 			<tr>
 
 				<td class="text-center align-middle">
-					${row.job_card} (${row.operation})
+					${row.job_card} 
+				</td>
+
+				<td class="text-center align-middle">
+					${row.operation}
 				</td>
 
 				<td class="text-center align-middle">
@@ -480,7 +495,6 @@ class ProductionProcessor {
 		);
 	}
 
-
 	create_action(parent, row) {
 
 		parent.empty();
@@ -616,6 +630,12 @@ class ProductionProcessor {
 		this.employee.$input.on("change", () => {
 			this.apply_employee_to_all();
 		});
+
+		this.wrapper
+			.find(".rm-processing-btn")
+			.on("click", () => {
+				this.open_rm_processing();
+			});
 	}
 
 
@@ -752,5 +772,1397 @@ class ProductionProcessor {
 		this.render_dashboard(this.rows);
 		this.render_table(this.rows);
 
+	}
+
+
+	open_rm_processing() {
+		const dialog = new frappe.ui.Dialog({
+
+			title: __("RM Processing"),
+
+			fields: [
+				{
+					fieldtype: "Select",
+					fieldname: "process",
+					label: __("Process"),
+					reqd: 1,
+					options: [
+						"",
+						"RM Issue",
+						"Process Cuts",
+						"RM Receive"
+					]
+				},
+
+				{
+					fieldtype: "HTML",
+					fieldname: "process_content"
+				}
+			],
+
+			size: "extra-large",
+		});
+
+		dialog.show();
+
+		const process_control = dialog.fields_dict.process;
+		const process_input = process_control.$input;
+		const content_wrapper = dialog.fields_dict.process_content.$wrapper;
+
+
+		// Prevent Frappe router from receiving select events
+
+		process_input.on("click", function (e) {
+			e.stopPropagation();
+		});
+
+
+		process_input.on("mousedown", function (e) {
+			e.stopPropagation();
+		});
+
+
+		// Process changed
+
+		process_input.on("change", (e) => {
+			e.stopPropagation();
+			const process = e.target.value;
+
+			content_wrapper.empty();
+
+			// Nothing selected
+			if (!process) {
+
+				content_wrapper.html(`
+				<div class="text-center text-muted py-5">
+					${__("Select a process to continue.")}
+				</div>
+			`);
+
+				return;
+			}
+
+
+			// RM Issue
+			if (process === "RM Issue") {
+				this.load_rm_issue_content(
+					content_wrapper,
+					dialog
+				);
+
+				return;
+			}
+
+			// Process Cuts
+			if (process === "Process Cuts") {
+				this.load_process_cuts_content(
+					content_wrapper,
+					dialog
+				);
+
+				return;
+			}
+
+			// RM Receive
+			if (process === "RM Receive") {
+				this.load_rm_receive_content(
+					content_wrapper,
+					dialog
+				);
+
+				return;
+			}
+
+		});
+
+		this.rm_processing_dialog = dialog;
+	}
+
+
+
+	load_rm_issue_content(wrapper, dialog) {
+
+		wrapper.html(`
+		<div class="text-center text-muted py-5">
+
+			<div class="mb-3">
+				<i class="fa fa-spinner fa-spin fa-2x"></i>
+			</div>
+
+			<div>
+				${__("Finding RM Items...")}
+			</div>
+
+		</div>
+	`);
+
+
+		const production_plan =
+			this.production_plan.get_value();
+
+		if (!production_plan) {
+
+			wrapper.html(`
+			<div class="alert alert-warning">
+				${__("Please select Production Plan first.")}
+			</div>
+		`);
+
+			return;
+		}
+
+		frappe.call({
+
+			method:
+				"ec_production.api.prod_plan.get_rm_issue_items",
+
+			args: {
+				production_plan: production_plan
+			},
+
+			freeze: true,
+
+			callback: (r) => {
+				const rm_items =
+					r.message || [];
+
+				if (!rm_items.length) {
+
+					wrapper.html(`
+					<div class="text-center text-muted py-5">
+						${__("No RM items found.")}
+					</div>
+				`);
+
+					return;
+				}
+
+				// IMPORTANT:
+				// render directly here
+				this.render_rm_issue_items(
+					wrapper,
+					rm_items,
+					dialog
+				);
+
+			},
+
+			error: (r) => {
+				wrapper.html(`
+				<div class="alert alert-danger">
+					${__("Unable to load RM Issue items.")}
+				</div>
+			`);
+
+			}
+
+		});
+	}
+
+
+	render_rm_issue_items(wrapper, rm_items, dialog) {
+		console.log(
+			"[RM ISSUE] Rendering items:",
+			rm_items
+		);
+
+		this.rm_issue_items = rm_items;
+
+		let html = `
+		<div class="rm-issue-items">
+
+			<div class="table-responsive" style="overflow:visible;">
+
+				<table class="table table-bordered">
+
+					<thead>
+						<tr>
+							<th>${__("Job Card")}</th>
+							<th>${__("Work Order")}</th>
+							<th>${__("Item")}</th>
+							<th>${__("Cut Item")}</th>
+							<th>${__("BOM")}</th>
+							<th>${__("Components")}</th>
+							<th style="width: 150px;">
+								${__("Action")}
+							</th>
+						</tr>
+					</thead>
+
+					<tbody>
+	`;
+
+		rm_items.forEach((item, index) => {
+
+			const components = item.components || [];
+
+			let components_html = "";
+
+			if (!components.length) {
+
+				components_html = `
+				<span class="text-muted">
+					${__("No components")}
+				</span>
+			`;
+
+			} else {
+
+				components_html = components
+					.map((component) => {
+
+						return `
+						<div class="mb-1">
+
+							<strong>
+								${frappe.utils.escape_html(
+							component.item_code || ""
+						)}
+							</strong>
+
+							<span class="text-muted">
+								-
+								${frappe.utils.escape_html(
+							component.item_name || ""
+						)}
+							</span>
+
+							<div class="text-muted small">
+
+								${component.qty || 0}
+
+								${frappe.utils.escape_html(
+							component.uom || ""
+						)}
+
+							</div>
+
+						</div>
+					`;
+
+					})
+					.join("");
+			}
+
+			html += `
+			<tr data-index="${index}">
+
+				<td>
+					${frappe.utils.escape_html(
+				item.job_card || ""
+			)}
+				</td>
+
+				<td>
+					${frappe.utils.escape_html(
+				item.work_order || ""
+			)}
+				</td>
+
+				<td>
+
+					<strong>
+						${frappe.utils.escape_html(
+				item.source_item || ""
+			)}
+					</strong>
+
+					<div class="text-muted small">
+						${frappe.utils.escape_html(
+				item.source_item_name || ""
+			)}
+					</div>
+
+					<div class="text-muted small">
+						Qty:
+						${item.job_qty || 0}
+					</div>
+
+				</td>
+
+				<td>
+
+					<strong>
+						${frappe.utils.escape_html(
+				item.cut_item_code || ""
+			)}
+					</strong>
+
+					<div class="text-muted small">
+						${frappe.utils.escape_html(
+				item.cut_item_name || ""
+			)}
+					</div>
+
+				</td>
+
+				<td>
+					<div class="rm-bom-control"></div>
+				</td>
+
+				<td>
+					<div class="rm-components">
+						${components_html}
+					</div>
+				</td>
+
+				<td class="text-center">
+
+					<button
+						class="btn btn-sm btn-primary create-rm-stock-entry"
+						data-index="${index}"
+					>
+						<i class="fa fa-plus"></i>
+						${__("Create Stock Entry")}
+					</button>
+
+				</td>
+
+			</tr>
+		`;
+		});
+
+		html += `
+					</tbody>
+
+				</table>
+
+			</div>
+
+		</div>
+	`;
+
+		wrapper.html(html);
+
+		// Create native Frappe BOM Link controls
+
+		wrapper.find("tbody tr").each((index, tr) => {
+
+			const item = rm_items[index];
+
+			const bom_wrapper =
+				$(tr).find(".rm-bom-control");
+
+			const bom_control = frappe.ui.form.make_control({
+
+				parent: bom_wrapper,
+
+				df: {
+					fieldtype: "Link",
+					fieldname: `bom_${index}`,
+					options: "BOM",
+
+					get_query: () => {
+
+						return {
+							filters: {
+								item: item.cut_item_code,
+								docstatus: 1,
+								is_active: 1
+							}
+						};
+
+					}
+				},
+
+				render_input: true
+
+			});
+
+			bom_control.refresh();
+
+			// Set current BOM
+			if (item.bom_no) {
+
+				bom_control.set_value(
+					item.bom_no
+				);
+
+			}
+
+			// Store control against item
+			item.bom_control = bom_control;
+
+			// BOM changed
+			bom_control.$input.on("change", (e) => {
+
+				e.preventDefault();
+				e.stopPropagation();
+
+				const bom_no =
+					bom_control.get_value();
+
+				if (!bom_no) {
+					return;
+				}
+
+				// Update selected BOM
+				item.bom_no = bom_no;
+
+				// Fetch latest components
+				this.load_rm_bom_components(
+					item,
+					$(tr).find(".rm-components")
+				);
+
+			});
+
+		});
+
+
+		// Create Stock Entry buttons
+		// wrapper
+		// 	.find(".create-rm-stock-entry")
+		// 	.on("click", (e) => {
+
+		// 		e.preventDefault();
+		// 		e.stopPropagation();
+
+		// 		const index = $(e.currentTarget).data("index");
+		// 		const item = rm_items[index];
+
+		// 		if (!item) {
+		// 			frappe.msgprint(__("Unable to find selected RM item."));
+		// 			return;
+		// 		}
+
+		// 		if (!item.work_order) {
+		// 			frappe.msgprint(__("Work Order is required."));
+		// 			return;
+		// 		}
+
+		// 		frappe.call({
+		// 			method:
+		// 				"erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry",
+
+		// 			args: {
+		// 				work_order_id: item.work_order,
+		// 				purpose: "Manufacture",
+		// 				qty: item.job_qty || 1
+		// 			},
+
+		// 			freeze: true,
+		// 			freeze_message: __("Preparing Stock Entry..."),
+
+		// 			callback: (r) => {
+
+		// 				if (!r.message) {
+		// 					frappe.msgprint(
+		// 						__("Unable to create Stock Entry.")
+		// 					);
+		// 					return;
+		// 				}
+
+		// 				const stock_entry = r.message;
+
+		// 				stock_entry.__islocal = 1;
+		// 				stock_entry.docstatus = 0;
+
+		// 				frappe.model.sync(stock_entry);
+
+		// 				// frappe.set_route(
+		// 				// 	"Form",
+		// 				// 	"Stock Entry",
+		// 				// 	stock_entry.name
+		// 				// );
+		// 				const url = frappe.urllib.get_full_url(
+		// 					`/app/stock-entry/${encodeURIComponent(stock_entry.name)}`
+		// 				);
+
+		// 				window.open(url, "_blank");
+		// 			}
+		// 		});
+		// 	});
+
+		// wrapper
+		// 	.find(".create-rm-stock-entry")
+		// 	.on("click", (e) => {
+
+		// 		e.preventDefault();
+		// 		e.stopPropagation();
+
+		// 		const index = $(e.currentTarget).data("index");
+		// 		const item = rm_items[index];
+
+		// 		if (!item) {
+		// 			frappe.msgprint(
+		// 				__("Unable to find selected RM item.")
+		// 			);
+		// 			return;
+		// 		}
+
+		// 		if (!item.job_card) {
+		// 			frappe.msgprint(
+		// 				__("Job Card is required.")
+		// 			);
+		// 			return;
+		// 		}
+
+		// 		if (!item.job_qty || item.job_qty <= 0) {
+		// 			frappe.msgprint(
+		// 				__("Job Qty must be greater than zero.")
+		// 			);
+		// 			return;
+		// 		}
+
+		// 		// Remember selected Job Card for the next stages.
+		// 		this.selected_rm_item = item;
+
+		// 		frappe.call({
+
+		// 			method:
+		// 				"ec_production.api.prod_plan.issue_rm_for_job_card",
+
+		// 			args: {
+		// 				job_card: item.job_card,
+		// 				qty: item.job_qty
+		// 			},
+
+		// 			freeze: true,
+
+		// 			freeze_message:
+		// 				__("Preparing RM Issue Stock Entry..."),
+
+		// 			callback: (r) => {
+
+		// 				if (!r.message || !r.message.name) {
+
+		// 					frappe.msgprint(
+		// 						__("Unable to create RM Issue Stock Entry.")
+		// 					);
+
+		// 					return;
+		// 				}
+
+		// 				const stock_entry = r.message;
+
+		// 				const url = frappe.urllib.get_full_url(
+		// 					`/app/stock-entry/${encodeURIComponent(
+		// 						stock_entry.name
+		// 					)}`
+		// 				);
+
+		// 				window.open(url, "_blank");
+		// 			}
+		// 		});
+		// 	});
+
+
+		wrapper
+			.find(".create-rm-stock-entry")
+			.on("click", (e) => {
+
+				e.preventDefault();
+				e.stopPropagation();
+
+				const index = $(e.currentTarget).data("index");
+				const item = rm_items[index];
+
+				if (!item) {
+					frappe.msgprint(__("Unable to find selected RM item."));
+					return;
+				}
+
+				// Create a completely new Stock Entry locally
+				const stock_entry = frappe.model.get_new_doc("Stock Entry");
+
+				stock_entry.stock_entry_type = "Manufacture";
+
+				// Open new Stock Entry in a new tab
+				const url = frappe.urllib.get_full_url(
+					`/app/stock-entry/${encodeURIComponent(stock_entry.name)}`
+				);
+
+				window.open(url, "_blank");
+			});
+	}
+
+
+	load_rm_bom_components(item, components_wrapper) {
+
+		const bom_no = item.bom_no;
+
+		if (!bom_no) {
+			return;
+		}
+
+		components_wrapper.html(`
+		<div class="text-muted">
+			<i class="fa fa-spinner fa-spin"></i>
+			${__("Loading components...")}
+		</div>
+	`);
+
+		frappe.call({
+
+			method:
+				"erpnext.manufacturing.doctype.bom.bom.get_bom_items",
+
+			args: {
+
+				bom: bom_no,
+
+				company:
+					frappe.defaults.get_user_default("Company"),
+
+				qty: 1,
+
+				// IMPORTANT:
+				// only direct BOM items
+				fetch_exploded: 0
+			},
+
+			freeze: false,
+
+			callback: (r) => {
+				const components =
+					r.message || [];
+
+				// Replace old components
+				item.components = components;
+
+				if (!components.length) {
+
+					components_wrapper.html(`
+					<span class="text-muted">
+						${__("No components")}
+					</span>
+				`);
+
+					return;
+				}
+
+				const html = components
+					.map((component) => {
+
+						return `
+						<div class="mb-1">
+
+							<strong>
+								${frappe.utils.escape_html(
+							component.item_code || ""
+						)}
+							</strong>
+
+							<span class="text-muted">
+								-
+								${frappe.utils.escape_html(
+							component.item_name || ""
+						)}
+							</span>
+
+							<div class="text-muted small">
+
+								${component.qty || 0}
+
+								${frappe.utils.escape_html(
+							component.stock_uom || ""
+						)}
+
+							</div>
+
+						</div>
+					`;
+
+					})
+					.join("");
+
+				components_wrapper.html(html);
+
+			},
+
+			error: (r) => {
+
+				console.error(
+					"[RM ISSUE] BOM component error:",
+					r
+				);
+
+				components_wrapper.html(`
+				<div class="text-danger">
+					${__("Unable to load BOM components.")}
+				</div>
+			`);
+			}
+		});
+	}
+
+
+
+	load_process_cuts_content(wrapper, dialog) {
+
+		wrapper.html(`
+		<div class="p-4">
+
+			<h5>
+				${__("Process Cuts")}
+			</h5>
+
+			<div class="text-center text-muted py-5">
+				<i class="fa fa-spinner fa-spin fa-2x"></i>
+
+				<div class="mt-3">
+					${__("Finding Process Cut Items...")}
+				</div>
+			</div>
+
+		</div>
+	`);
+
+		const production_plan =
+			this.production_plan.get_value();
+
+		if (!production_plan) {
+
+			wrapper.html(`
+			<div class="alert alert-warning">
+				${__("Please select Production Plan first.")}
+			</div>
+		`);
+
+			return;
+		}
+
+		frappe.call({
+
+			method:
+				"ec_production.api.prod_plan.get_rm_issue_items",
+
+			args: {
+				production_plan: production_plan
+			},
+
+			freeze: true,
+
+			freeze_message:
+				__("Finding Process Cut Items..."),
+
+			callback: (r) => {
+
+				const rm_items = r.message || [];
+
+				if (!rm_items.length) {
+
+					wrapper.html(`
+					<div class="text-center text-muted py-5">
+						${__("No Process Cut items found.")}
+					</div>
+				`);
+
+					return;
+				}
+
+				this.render_process_cuts_items(
+					wrapper,
+					rm_items,
+					dialog
+				);
+			},
+
+			error: () => {
+
+				wrapper.html(`
+				<div class="alert alert-danger">
+					${__("Unable to load Process Cut items.")}
+				</div>
+			`);
+			}
+		});
+	}
+
+
+	render_process_cuts_items(wrapper, rm_items, dialog) {
+
+		let html = `
+		<div class="process-cuts-items">
+
+			<div class="table-responsive" style="overflow:visible;">
+
+				<table class="table table-bordered">
+
+					<thead>
+						<tr>
+							<th>${__("Job Card")}</th>
+							<th>${__("Work Order")}</th>
+							<th>${__("Item")}</th>
+							<th>${__("Cut Item")}</th>
+							<th style="width: 140px;">
+								${__("Qty")}
+							</th>
+							<th style="width: 180px;">
+								${__("Action")}
+							</th>
+						</tr>
+					</thead>
+
+					<tbody>
+	`;
+
+		rm_items.forEach((item, index) => {
+
+			html += `
+			<tr data-index="${index}">
+
+				<td>
+					${frappe.utils.escape_html(
+				item.job_card || ""
+			)}
+				</td>
+
+				<td>
+					${frappe.utils.escape_html(
+				item.work_order || ""
+			)}
+				</td>
+
+				<td>
+					<strong>
+						${frappe.utils.escape_html(
+				item.source_item || ""
+			)}
+					</strong>
+
+					<div class="text-muted small">
+						${frappe.utils.escape_html(
+				item.source_item_name || ""
+			)}
+					</div>
+				</td>
+
+				<td>
+					<strong>
+						${frappe.utils.escape_html(
+				item.cut_item_code || ""
+			)}
+					</strong>
+
+					<div class="text-muted small">
+						${frappe.utils.escape_html(
+				item.cut_item_name || ""
+			)}
+					</div>
+				</td>
+
+				<td>
+
+					<input
+						type="number"
+						class="form-control process-cut-qty"
+						data-index="${index}"
+						min="0"
+						step="0.001"
+						max="${item.job_qty || 0}"
+						placeholder="${__("Enter Qty")}"
+					>
+
+					<div class="text-muted small mt-1">
+						Max: ${item.job_qty || 0}
+					</div>
+
+				</td>
+
+				<td class="text-center">
+
+					<button
+						class="btn btn-sm btn-primary create-process-cuts-stock-entry"
+						data-index="${index}"
+					>
+						<i class="fa fa-plus"></i>
+						${__("Create Stock Entry")}
+					</button>
+
+				</td>
+
+			</tr>
+		`;
+		});
+
+		html += `
+					</tbody>
+
+				</table>
+
+			</div>
+
+		</div>
+	`;
+
+		wrapper.html(html);
+
+
+		// ---------------------------------------------------------
+		// Process Cuts → Create Stock Entry
+		// ---------------------------------------------------------
+
+		wrapper
+			.find(".create-process-cuts-stock-entry")
+			.on("click", (e) => {
+
+				e.preventDefault();
+				e.stopPropagation();
+
+				const index =
+					$(e.currentTarget).data("index");
+
+				const item =
+					rm_items[index];
+
+				if (!item) {
+
+					frappe.msgprint(
+						__("Unable to find selected RM item.")
+					);
+
+					return;
+				}
+
+				if (!item.job_card) {
+
+					frappe.msgprint(
+						__("Job Card is required.")
+					);
+
+					return;
+				}
+
+
+				// Get Qty from THIS row
+				const qty = parseFloat(
+					wrapper
+						.find(
+							`.process-cut-qty[data-index="${index}"]`
+						)
+						.val()
+				);
+
+
+				if (!qty || qty <= 0) {
+
+					frappe.msgprint(
+						__("Please enter a valid quantity.")
+					);
+
+					return;
+				}
+
+
+				// Don't allow more than Job Qty
+				if (
+					item.job_qty &&
+					qty > parseFloat(item.job_qty)
+				) {
+
+					frappe.msgprint(
+						__("Quantity cannot be greater than Job Qty {0}.")
+							.replace(
+								"{0}",
+								item.job_qty
+							)
+					);
+
+					return;
+				}
+
+
+				frappe.call({
+
+					method:
+						"ec_production.api.prod_plan.process_cut_for_job_card",
+
+					args: {
+
+						job_card: item.job_card,
+
+						qty: qty
+
+					},
+
+					freeze: true,
+
+					freeze_message:
+						__("Preparing Process Cut Stock Entry..."),
+
+					callback: (r) => {
+
+						if (
+							!r.message ||
+							!r.message.name
+						) {
+
+							frappe.msgprint(
+								__(
+									"Unable to create Process Cut Stock Entry."
+								)
+							);
+
+							return;
+						}
+
+
+						const stock_entry =
+							r.message;
+
+
+						const url =
+							frappe.urllib.get_full_url(
+								`/app/stock-entry/${encodeURIComponent(
+									stock_entry.name
+								)}`
+							);
+
+
+						window.open(
+							url,
+							"_blank"
+						);
+
+					}
+
+				});
+
+			});
+	}
+
+
+
+	load_rm_receive_content(wrapper, dialog) {
+
+		wrapper.html(`
+		<div class="p-4">
+
+			<h5>
+				${__("RM Receive")}
+			</h5>
+
+			<div class="text-center text-muted py-5">
+
+				<i class="fa fa-spinner fa-spin fa-2x"></i>
+
+				<div class="mt-3">
+					${__("Finding RM Receive Items...")}
+				</div>
+
+			</div>
+
+		</div>
+	`);
+
+		const production_plan =
+			this.production_plan.get_value();
+
+		if (!production_plan) {
+
+			wrapper.html(`
+			<div class="alert alert-warning">
+				${__("Please select Production Plan first.")}
+			</div>
+		`);
+
+			return;
+		}
+
+		frappe.call({
+
+			method:
+				"ec_production.api.prod_plan.get_rm_issue_items",
+
+			args: {
+				production_plan: production_plan
+			},
+
+			freeze: true,
+
+			freeze_message:
+				__("Finding RM Receive Items..."),
+
+			callback: (r) => {
+
+				const rm_items =
+					r.message || [];
+
+				if (!rm_items.length) {
+
+					wrapper.html(`
+					<div class="text-center text-muted py-5">
+						${__("No RM Receive items found.")}
+					</div>
+				`);
+
+					return;
+				}
+
+				this.render_rm_receive_items(
+					wrapper,
+					rm_items,
+					dialog
+				);
+			},
+
+			error: () => {
+
+				wrapper.html(`
+				<div class="alert alert-danger">
+					${__("Unable to load RM Receive items.")}
+				</div>
+			`);
+			}
+		});
+	}
+
+
+	render_rm_receive_items(wrapper, rm_items, dialog) {
+
+		let html = `
+		<div class="rm-receive-items">
+
+			<div class="table-responsive" style="overflow:visible;">
+
+				<table class="table table-bordered">
+
+					<thead>
+						<tr>
+							<th>${__("Job Card")}</th>
+							<th>${__("Work Order")}</th>
+							<th>${__("Item")}</th>
+							<th>${__("Cut Item")}</th>
+							<th style="width: 140px;">
+								${__("Qty")}
+							</th>
+							<th style="width: 180px;">
+								${__("Action")}
+							</th>
+						</tr>
+					</thead>
+
+					<tbody>
+	`;
+
+		rm_items.forEach((item, index) => {
+
+			html += `
+			<tr data-index="${index}">
+
+				<td>
+					${frappe.utils.escape_html(
+				item.job_card || ""
+			)}
+				</td>
+
+				<td>
+					${frappe.utils.escape_html(
+				item.work_order || ""
+			)}
+				</td>
+
+				<td>
+
+					<strong>
+						${frappe.utils.escape_html(
+				item.source_item || ""
+			)}
+					</strong>
+
+					<div class="text-muted small">
+						${frappe.utils.escape_html(
+				item.source_item_name || ""
+			)}
+					</div>
+
+				</td>
+
+				<td>
+
+					<strong>
+						${frappe.utils.escape_html(
+				item.cut_item_code || ""
+			)}
+					</strong>
+
+					<div class="text-muted small">
+						${frappe.utils.escape_html(
+				item.cut_item_name || ""
+			)}
+					</div>
+
+				</td>
+
+				<td>
+
+					<input
+						type="number"
+						class="form-control rm-receive-qty"
+						data-index="${index}"
+						min="0"
+						step="0.001"
+						max="${item.job_qty || 0}"
+						placeholder="${__("Enter Qty")}"
+					>
+
+					<div class="text-muted small mt-1">
+						Max: ${item.job_qty || 0}
+					</div>
+
+				</td>
+
+				<td class="text-center">
+
+					<button
+						class="btn btn-sm btn-primary create-rm-receive-stock-entry"
+						data-index="${index}"
+					>
+						<i class="fa fa-plus"></i>
+						${__("Create Stock Entry")}
+					</button>
+
+				</td>
+
+			</tr>
+		`;
+		});
+
+		html += `
+					</tbody>
+
+				</table>
+
+			</div>
+
+		</div>
+	`;
+
+		wrapper.html(html);
+
+
+		// ---------------------------------------------------------
+		// RM Receive → Create Stock Entry
+		// ---------------------------------------------------------
+
+		wrapper
+			.find(".create-rm-receive-stock-entry")
+			.on("click", (e) => {
+
+				e.preventDefault();
+				e.stopPropagation();
+
+				const index =
+					$(e.currentTarget).data("index");
+
+				const item =
+					rm_items[index];
+
+				if (!item) {
+
+					frappe.msgprint(
+						__("Unable to find selected RM item.")
+					);
+
+					return;
+				}
+
+				if (!item.job_card) {
+
+					frappe.msgprint(
+						__("Job Card is required.")
+					);
+
+					return;
+				}
+
+
+				// Get Qty from THIS row
+				const qty = parseFloat(
+					wrapper
+						.find(
+							`.rm-receive-qty[data-index="${index}"]`
+						)
+						.val()
+				);
+
+
+				if (!qty || qty <= 0) {
+
+					frappe.msgprint(
+						__("Please enter a valid quantity.")
+					);
+
+					return;
+				}
+
+
+				// Don't allow more than Job Qty
+				if (
+					item.job_qty &&
+					qty > parseFloat(item.job_qty)
+				) {
+
+					frappe.msgprint(
+						__("Quantity cannot be greater than Job Qty {0}.")
+							.replace(
+								"{0}",
+								item.job_qty
+							)
+					);
+
+					return;
+				}
+
+
+				frappe.call({
+
+					method:
+						"ec_production.api.prod_plan.receive_rm_for_job_card",
+
+					args: {
+
+						job_card: item.job_card,
+
+						qty: qty
+
+					},
+
+					freeze: true,
+
+					freeze_message:
+						__("Preparing RM Receive Stock Entry..."),
+
+					callback: (r) => {
+
+						if (
+							!r.message ||
+							!r.message.name
+						) {
+
+							frappe.msgprint(
+								__(
+									"Unable to create RM Receive Stock Entry."
+								)
+							);
+
+							return;
+						}
+
+
+						const stock_entry =
+							r.message;
+
+
+						const url =
+							frappe.urllib.get_full_url(
+								`/app/stock-entry/${encodeURIComponent(
+									stock_entry.name
+								)}`
+							);
+
+
+						window.open(
+							url,
+							"_blank"
+						);
+
+					}
+
+				});
+
+			});
 	}
 }

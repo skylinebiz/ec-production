@@ -72,21 +72,21 @@ async function open_cutting_dialog(frm) {
                 <td class="align-middle">
                     <strong>
                         ${frappe.utils.escape_html(
-            item.item_code || ""
-        )}
+                            item.item_code || ""
+                        )}
                     </strong>
                     <br>
                     <small class="text-muted">
                         ${frappe.utils.escape_html(
-            item.item_name || ""
-        )}
+                            item.item_name || ""
+                        )}
                     </small>
                 </td>
 
                 <td class="align-middle">
                     ${frappe.utils.escape_html(
-            (item.source_items || []).join(", ")
-        )}
+                        (item.source_items || []).join(", ")
+                    )}
                 </td>
 
                 <td>
@@ -132,22 +132,23 @@ async function open_cutting_dialog(frm) {
         primary_action_label: __("Process Stock Entry"),
 
         primary_action: async function () {
-            // Collect and validate selected BOMs
-
             const selected_items = [];
 
             for (let index = 0; index < cutting_items.length; index++) {
                 const item = cutting_items[index];
-                const bom_control = dialog[`bom_control_${index}`];
 
-                let bom_no = bom_control?.get_value()?.trim();
+                const bom_control =
+                    dialog[`bom_control_${index}`];
+
+                const bom_no =
+                    bom_control?.get_value()?.trim();
 
                 if (!bom_no) {
                     frappe.msgprint({
                         title: __("BOM Required"),
                         message: __(
                             "Select a BOM for {0} before processing.",
-                            [frappe.utils.escape_html(item.item_code)]
+                            [item.item_code]
                         ),
                         indicator: "red"
                     });
@@ -163,17 +164,9 @@ async function open_cutting_dialog(frm) {
             }
 
             if (!selected_items.length) {
-                frappe.msgprint({
-                    title: __("Process Cutting"),
-                    message: __("No Cutting items selected."),
-                    indicator: "orange"
-                });
-
                 return;
             }
 
-
-            // Get Stock Entry data from backend
             const r = await frappe.call({
                 method:
                     "ec_production.api.prod_plan.get_cutting_stock_entry_items",
@@ -187,90 +180,23 @@ async function open_cutting_dialog(frm) {
                 freeze_message: __("Preparing Stock Entry...")
             });
 
-            const data = r.message;
-
-            if (!data?.items?.length) {
-                frappe.msgprint({
-                    title: __("Process Stock Entry"),
-                    message: __("No cutting items found."),
-                    indicator: "orange"
-                });
-
+            if (!r.message) {
                 return;
             }
 
             dialog.hide();
 
-            await frappe.model.with_doctype("Stock Entry");
+            const stock_entry_data = r.message;
 
-            const stock_entry = frappe.model.get_new_doc("Stock Entry");
-            stock_entry.stock_entry_type = "Manufacture";
-            stock_entry.posting_date = data.posting_date;
-            stock_entry.posting_time = data.posting_time;
+            stock_entry_data.__islocal = 1;
+            stock_entry_data.docstatus = 0;
 
-            const bom_names = [
-                ...new Set(
-                    data.items
-                        .map(item => item.bom_no)
-                        .filter(Boolean)
-                )
-            ];
-
-            const bom_docs = await Promise.all(
-                bom_names.map(bom_no =>
-                    frappe.db.get_doc("BOM", bom_no)
-                )
-            );
-
-            const bom_map = Object.fromEntries(
-                bom_docs.map(bom => [bom.name, bom])
-            );
-
-
-            // Add items
-
-            for (const item of data.items) {
-
-                const finished_item = frappe.model.add_child(
-                    stock_entry,
-                    "Stock Entry Detail",
-                    "items"
-                );
-
-                finished_item.item_code = item.item_code;
-                finished_item.qty = flt(item.qty);
-                finished_item.is_finished_item = 1;
-                finished_item.bom_no = item.bom_no;
-
-                const bom = bom_map[item.bom_no];
-
-                if (!bom?.items?.length) {
-                    continue;
-                }
-
-                for (const bom_item of bom.items) {
-
-                    const component = frappe.model.add_child(
-                        stock_entry,
-                        "Stock Entry Detail",
-                        "items"
-                    );
-
-                    component.item_code = bom_item.item_code;
-
-                    component.qty = flt(bom_item.qty);
-                    component.uom = bom_item.uom;
-                    component.stock_uom = bom_item.stock_uom;
-                    component.conversion_factor = flt(bom_item.conversion_factor) || 1;
-                    component.s_warehouse = item.s_warehouse;
-                    component.is_finished_item = 0;
-                }
-            }
+            frappe.model.sync(stock_entry_data);
 
             frappe.set_route(
                 "Form",
                 "Stock Entry",
-                stock_entry.name
+                stock_entry_data.name
             );
         }
 
