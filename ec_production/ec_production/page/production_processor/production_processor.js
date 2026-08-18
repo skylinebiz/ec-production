@@ -705,7 +705,7 @@ class ProductionProcessor {
 			freeze_message: __("Processing Job Card..."),
 
 			callback: (r) => {
-				console.log(r);
+				// console.log(r);
 
 				if (r.exc) {
 					return;
@@ -937,8 +937,6 @@ class ProductionProcessor {
 					return;
 				}
 
-				// IMPORTANT:
-				// render directly here
 				this.render_rm_issue_items(
 					wrapper,
 					rm_items,
@@ -961,10 +959,10 @@ class ProductionProcessor {
 
 
 	render_rm_issue_items(wrapper, rm_items, dialog) {
-		console.log(
-			"[RM ISSUE] Rendering items:",
-			rm_items
-		);
+		// console.log(
+		// 	"[RM ISSUE] Rendering items:",
+		// 	rm_items
+		// );
 
 		this.rm_issue_items = rm_items;
 
@@ -1224,33 +1222,45 @@ class ProductionProcessor {
 					return;
 				}
 
-				// Native Frappe new document flow
 				frappe.new_doc("Stock Entry", {}, (doc) => {
 
-					// Stock Entry type
-					doc.stock_entry_type = "Material Issue";
+					doc.stock_entry_type = "Material Transfer for Manufacture";
+					doc.items = [];
 
 					(item.components || []).forEach((component) => {
 
 						const row = frappe.model.add_child(
 							doc,
+							"Stock Entry Detail",
 							"items"
 						);
 
 						row.item_code = component.item_code;
+						row.item_name = component.item_name;
 						row.qty = component.qty;
 						row.uom = component.uom;
 
 					});
 
-					const item_row = frappe.model.add_child(
+					const cut_row = frappe.model.add_child(
 						doc,
+						"Stock Entry Detail",
 						"items"
 					);
 
-					item_row.item_code = item.cut_item_code;
-					item_row.qty = item.job_qty;
+					cut_row.item_code = item.cut_item_code;
+					cut_row.item_name = item.cut_item_name;
+					cut_row.qty = item.job_qty;
 
+					// const source_row = frappe.model.add_child(
+					// 	doc,
+					// 	"Stock Entry Detail",
+					// 	"items"
+					// );
+
+					// source_row.item_code = item.source_item;
+					// source_row.item_name = item.source_item_name;
+					// source_row.qty = item.job_qty;
 				});
 			});
 	}
@@ -1581,7 +1591,6 @@ class ProductionProcessor {
 					return;
 				}
 
-				// Get user entered quantity
 				const qty = flt(
 					$(e.currentTarget)
 						.closest("tr")
@@ -1594,22 +1603,45 @@ class ProductionProcessor {
 					return;
 				}
 
-				// Create new Stock Entry
 				frappe.new_doc("Stock Entry", {}, (doc) => {
 
-					doc.stock_entry_type = "Material Receipt";
+					doc.stock_entry_type = "Manufacture";
+					doc.items = [];
 
-					// Add item
-					const row = frappe.model.add_child(
+					(item.components || []).forEach((component) => {
+
+						const row = frappe.model.add_child(
+							doc,
+							"Stock Entry Detail",
+							"items"
+						);
+
+						row.item_code = component.item_code;
+						row.item_name = component.item_name;
+						row.qty = component.qty;
+						row.uom = component.uom;
+
+					});
+
+					const cut_row = frappe.model.add_child(
 						doc,
 						"Stock Entry Detail",
 						"items"
 					);
 
-					row.item_code = item.cut_item_code;
-					row.item_name = item.cut_item_name;
-					row.qty = qty;
+					cut_row.item_code = item.cut_item_code;
+					cut_row.item_name = item.cut_item_name;
+					cut_row.qty = qty;
 
+					// const source_row = frappe.model.add_child(
+					// 	doc,
+					// 	"Stock Entry Detail",
+					// 	"items"
+					// );
+
+					// source_row.item_code = item.source_item;
+					// source_row.item_name = item.source_item_name;
+					// source_row.qty = qty;
 				});
 			});
 	}
@@ -1785,12 +1817,11 @@ class ProductionProcessor {
 						data-index="${index}"
 						min="0"
 						step="0.001"
-						max="${item.job_qty || 0}"
 						placeholder="${__("Enter Qty")}"
 					>
 
 					<div class="text-muted small mt-1">
-						Max: ${item.job_qty || 0}
+						Qty: ${item.job_qty || 0}
 					</div>
 
 				</td>
@@ -1838,7 +1869,6 @@ class ProductionProcessor {
 					return;
 				}
 
-				// Get user entered quantity
 				const qty = flt(
 					$(e.currentTarget)
 						.closest("tr")
@@ -1851,22 +1881,48 @@ class ProductionProcessor {
 					return;
 				}
 
-				// Create new Stock Entry
 				frappe.new_doc("Stock Entry", {}, (doc) => {
 
-					doc.stock_entry_type = "Material Receipt";
+					doc.stock_entry_type = "Material Transfer";
+					doc.items = [];
 
-					// Add item
-					const row = frappe.model.add_child(
+					(item.components || []).forEach((component) => {
+
+						const row = frappe.model.add_child(
+							doc,
+							"Stock Entry Detail",
+							"items"
+						);
+
+						row.item_code = component.item_code;
+						row.item_name = component.item_name;
+						row.qty = component.qty;
+						row.uom = component.uom;
+						// row.s_warehouse = source_warehouse;
+
+					});
+
+					const cut_row = frappe.model.add_child(
 						doc,
 						"Stock Entry Detail",
 						"items"
 					);
 
-					row.item_code = item.cut_item_code;
-					row.item_name = item.cut_item_name;
-					row.qty = qty;
+					cut_row.item_code = item.cut_item_code;
+					cut_row.item_name = item.cut_item_name;
+					cut_row.qty = qty;
+					// cut_row.t_warehouse = target_warehouse;
 
+
+					// const source_row = frappe.model.add_child(
+					// 	doc,
+					// 	"Stock Entry Detail",
+					// 	"items"
+					// );
+
+					// source_row.item_code = item.source_item;
+					// source_row.item_name = item.source_item_name;
+					// source_row.qty = qty;
 				});
 			});
 
