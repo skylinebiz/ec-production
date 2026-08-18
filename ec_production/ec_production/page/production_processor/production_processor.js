@@ -705,7 +705,7 @@ class ProductionProcessor {
 			freeze_message: __("Processing Job Card..."),
 
 			callback: (r) => {
-				console.log(r);
+				// console.log(r);
 
 				if (r.exc) {
 					return;
@@ -937,8 +937,6 @@ class ProductionProcessor {
 					return;
 				}
 
-				// IMPORTANT:
-				// render directly here
 				this.render_rm_issue_items(
 					wrapper,
 					rm_items,
@@ -961,10 +959,10 @@ class ProductionProcessor {
 
 
 	render_rm_issue_items(wrapper, rm_items, dialog) {
-		console.log(
-			"[RM ISSUE] Rendering items:",
-			rm_items
-		);
+		// console.log(
+		// 	"[RM ISSUE] Rendering items:",
+		// 	rm_items
+		// );
 
 		this.rm_issue_items = rm_items;
 
