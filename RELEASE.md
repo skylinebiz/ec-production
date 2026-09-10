@@ -12,7 +12,6 @@ failed for real users in production.
 
 ## Breaking change
 
-Access to all three doctypes changes from *System Manager only* to the role matrix in the README.
 If any current process depends on only System Manager being able to touch these records, review the
 new grants (Role Permission Manager → each doctype) before deploying.
 
