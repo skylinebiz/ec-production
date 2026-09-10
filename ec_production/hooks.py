@@ -125,7 +125,7 @@ doctype_js = {
 # Uninstallation
 # ------------
 
-# before_uninstall = "ec_production.uninstall.before_uninstall"
+before_uninstall = "ec_production.uninstall.before_uninstall"
 # after_uninstall = "ec_production.uninstall.after_uninstall"
 
 # Integration Setup
