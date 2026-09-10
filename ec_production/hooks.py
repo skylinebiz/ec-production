@@ -5,6 +5,23 @@ app_description = "EC"
 app_email = "support@skylinebiz.in"
 app_license = "mit"
 
+# Fixtures
+# --------
+# Custom DocPerm rows added via Customize Form for standard doctypes
+# (Operation, Employee) so the EC sales/purchase roles can select them
+# as link values. Scoped to just these roles/doctypes so we don't sweep
+# up unrelated Custom DocPerm rows from other apps/customizations.
+
+fixtures = [
+	{
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "in", ["Operation", "Employee"]],
+			["role", "in", ["Sales User", "Purchase User", "Sales Manager", "Purchase Manager"]],
+		],
+	}
+]
+
 # Apps
 # ------------------
 
@@ -108,7 +125,7 @@ doctype_js = {
 # Uninstallation
 # ------------
 
-# before_uninstall = "ec_production.uninstall.before_uninstall"
+before_uninstall = "ec_production.uninstall.before_uninstall"
 # after_uninstall = "ec_production.uninstall.after_uninstall"
 
 # Integration Setup

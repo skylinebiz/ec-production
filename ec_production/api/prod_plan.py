@@ -233,13 +233,8 @@ def get_cutting_stock_entry_items(production_plan, cutting_items):
 
     return stock_entry.as_dict()
 
-
 @frappe.whitelist()
 def get_rm_issue_items(production_plan):
-
-    # ---------------------------------------------------------
-    # Get Cutting Job Cards for this Production Plan
-    # ---------------------------------------------------------
 
     job_cards = frappe.get_all(
         "Job Card",
@@ -260,16 +255,12 @@ def get_rm_issue_items(production_plan):
 
     rm_items = []
 
-    processed = set()
-
     for job_card in job_cards:
 
         if not job_card.work_order:
             continue
 
-        # -----------------------------------------------------
-        # Make sure Job Card belongs to this Production Plan
-        # -----------------------------------------------------
+        # Get Work Order
 
         work_order_data = frappe.db.get_value(
             "Work Order",
@@ -288,10 +279,6 @@ def get_rm_issue_items(production_plan):
         if work_order_data.production_plan != production_plan:
             continue
 
-        # -----------------------------------------------------
-        # Item being manufactured
-        # -----------------------------------------------------
-
         source_item = (
             job_card.production_item
             or work_order_data.production_item
@@ -300,56 +287,33 @@ def get_rm_issue_items(production_plan):
         if not source_item:
             continue
 
-        # -----------------------------------------------------
-        # Prevent duplicate rows for same Cutting Job Card
-        # -----------------------------------------------------
-
-        key = job_card.name
-
-        if key in processed:
-            continue
-
-        processed.add(key)
-
-        # -----------------------------------------------------
         # Parent BOM
-        # -----------------------------------------------------
-
-        bom_no = (
+        parent_bom_no = (
             job_card.bom_no
             or work_order_data.bom_no
         )
 
-        if not bom_no:
-            bom_no = frappe.db.get_value(
+        if not parent_bom_no:
+            parent_bom_no = frappe.db.get_value(
                 "Item",
                 source_item,
                 "default_bom",
             )
 
-        if not bom_no:
+        if not parent_bom_no:
             continue
 
         parent_bom = frappe.get_doc(
             "BOM",
-            bom_no
+            parent_bom_no
         )
 
-        # -----------------------------------------------------
-        # Find Cutting component
-        # -----------------------------------------------------
+        # Find Cutting / Semi Finished Item
 
         for bom_item in parent_bom.items:
 
-            if bom_item.operation != "Cutting":
-                continue
-
             if not bom_item.item_code:
                 continue
-
-            # -------------------------------------------------
-            # BOM of Cutting Item
-            # -------------------------------------------------
 
             cut_bom_no = bom_item.bom_no
 
@@ -363,14 +327,12 @@ def get_rm_issue_items(production_plan):
             if not cut_bom_no:
                 continue
 
+            # Get Cut Item BOM
+
             cut_bom = frappe.get_doc(
                 "BOM",
                 cut_bom_no
             )
-
-            # -------------------------------------------------
-            # Components
-            # -------------------------------------------------
 
             components = []
 
@@ -387,18 +349,13 @@ def get_rm_issue_items(production_plan):
                     "stock_uom": cut_item.stock_uom,
                 })
 
-            # -------------------------------------------------
-            # ONE ROW PER CUTTING JOB CARD
-            # -------------------------------------------------
+            if not components:
+                continue
 
             rm_items.append({
-
                 "job_card": job_card.name,
-
                 "work_order": job_card.work_order,
-
                 "source_item": source_item,
-
                 "source_item_name": (
                     job_card.item_name
                     or frappe.db.get_value(
@@ -407,22 +364,15 @@ def get_rm_issue_items(production_plan):
                         "item_name",
                     )
                 ),
-
                 "cut_item_code": bom_item.item_code,
-
                 "cut_item_name": bom_item.item_name,
-
                 "bom_no": cut_bom_no,
-
                 "job_qty": flt(
                     job_card.for_quantity
                 ),
-
                 "components": components,
             })
 
-            # We only want the Cutting component
-            # for this Job Card.
             break
 
     return rm_items

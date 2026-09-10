@@ -1,6 +1,15 @@
 ### Ec Production
 
-EC
+### Doctypes
+
+- **EC Item Operation Rate** — per-item, per-operation rate master.
+- **EC Lot** — a lot of items available to be processed against an operation.
+- **EC Process Lot** — records qty actually processed per item/operation against an `EC Lot`;
+  submittable, with quantity validated against what's already been processed and what the `EC Lot`
+  allows.
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and [RELEASE.md](RELEASE.md) for release/deploy
+notes.
 
 ### Installation
 
