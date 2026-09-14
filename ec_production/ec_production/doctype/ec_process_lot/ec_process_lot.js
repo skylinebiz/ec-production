@@ -4,6 +4,13 @@
 frappe.ui.form.on("EC Process Lot", {
 
     setup(frm) {
+        frm.set_query("ec_lot", "lot_items", function () {
+            return {
+                filters: {
+                    closed: 0
+                }
+            };
+        });
 
         frm.set_query("item", "lot_items", function (doc, cdt, cdn) {
 

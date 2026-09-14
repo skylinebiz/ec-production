@@ -7,6 +7,8 @@
  "engine": "InnoDB",
  "field_order": [
   "date",
+  "column_break_atlp",
+  "closed",
   "section_break_sehp",
   "ec_lot_item",
   "section_break_yari",
@@ -52,12 +54,23 @@
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"
+  },
+  {
+   "fieldname": "column_break_atlp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "closed",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Closed"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-10 15:17:42.868597",
+ "modified": "2026-09-14 17:37:45.745832",
  "modified_by": "Administrator",
  "module": "Ec Production",
  "name": "EC Lot",

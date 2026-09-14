@@ -3,6 +3,16 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-09-14
+
+### Added
+- `closed` (`Closed`) checkbox on `EC Lot`, shown in the list view.
+
+### Changed
+- The `EC Lot` link field on `EC Process Lot` line items (`lot_items`) now only offers lots where
+  `closed` is unchecked — closed lots drop out of that search, but a row that already references a
+  lot keeps showing it even if the lot is closed afterward.
+
 ## [2.0.0] - 2026-09-10
 
 ### Added
