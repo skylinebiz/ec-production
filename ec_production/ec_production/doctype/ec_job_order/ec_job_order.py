@@ -13,6 +13,7 @@ class ECJobOrder(Document):
 		# exceed the Lot's available capacity — that hard check only
 		# runs at submit time (see before_submit).
 		self._process_details(strict=False)
+		self.total_qty = sum(flt(row.qty) for row in self.job_order_details)
 
 	def before_submit(self):
 		if not self.job_order_details:

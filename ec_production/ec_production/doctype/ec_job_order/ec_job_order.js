@@ -38,6 +38,8 @@ frappe.ui.form.on("EC Job Order", {
 
 	refresh(frm) {
 
+		update_total_qty(frm);
+
 		if (frm.doc.docstatus === 1) {
 
 			frm.add_custom_button(__("Process Receipt"), () => {
@@ -67,8 +69,27 @@ frappe.ui.form.on("EC Job Order", {
 				);
 			});
 		}
+	},
+
+	job_order_details_add(frm) {
+		update_total_qty(frm);
+	},
+
+	job_order_details_remove(frm) {
+		update_total_qty(frm);
 	}
 });
+
+
+function update_total_qty(frm) {
+
+	const total_qty = (frm.doc.job_order_details || []).reduce(
+		(sum, row) => sum + flt(row.qty),
+		0
+	);
+
+	frm.set_value("total_qty", total_qty);
+}
 
 
 async function calculate_amount(cdt, cdn) {
@@ -81,6 +102,8 @@ async function calculate_amount(cdt, cdn) {
 		"amount",
 		flt(row.qty) * flt(row.rate)
 	);
+
+	update_total_qty(cur_frm);
 }
 
 
@@ -129,6 +152,7 @@ frappe.ui.form.on("EC Job Order Detail", {
 		await frappe.model.set_value(cdt, cdn, "qty", "");
 		await frappe.model.set_value(cdt, cdn, "rate", "");
 		await frappe.model.set_value(cdt, cdn, "amount", "");
+		update_total_qty(frm);
 
 		if (!row.lot) {
 			frm.refresh_field("job_order_details");
@@ -158,6 +182,7 @@ frappe.ui.form.on("EC Job Order Detail", {
 		await frappe.model.set_value(cdt, cdn, "qty", "");
 		await frappe.model.set_value(cdt, cdn, "rate", "");
 		await frappe.model.set_value(cdt, cdn, "amount", "");
+		update_total_qty(frm);
 
 		if (!row.lot_data || !row.item) {
 			frm.refresh_field("job_order_details");
