@@ -1,0 +1,111 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-09-15 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "employee",
+  "lot",
+  "item",
+  "operation",
+  "qty_received",
+  "rate",
+  "amount",
+  "job_order",
+  "jod_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Employee",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Operation",
+   "options": "Operation",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lot",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Lot",
+   "options": "EC Lot",
+   "reqd": 1
+  },
+  {
+   "fieldname": "qty_received",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty Received",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "job_order",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Job Order",
+   "no_copy": 1,
+   "options": "EC Job Order",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "jod_id",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "JOD Id",
+   "no_copy": 1,
+   "options": "EC Job Order Detail",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-16 13:21:38.005315",
+ "modified_by": "Administrator",
+ "module": "Ec Production",
+ "name": "EC Job Receipt Detail",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

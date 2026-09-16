@@ -19,6 +19,15 @@ fixtures = [
 			["parent", "in", ["Operation", "Employee"]],
 			["role", "in", ["Sales User", "Purchase User", "Sales Manager", "Purchase Manager"]],
 		],
+	},
+	{
+		# Makes Employee Links (link fields, grid columns, dropdowns)
+		# display the employee's name instead of the raw HR-EMP-#### id.
+		"dt": "Property Setter",
+		"filters": [
+			["doc_type", "=", "Employee"],
+			["property", "=", "show_title_field_in_link"],
+		],
 	}
 ]
 

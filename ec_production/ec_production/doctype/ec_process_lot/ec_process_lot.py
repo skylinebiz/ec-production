@@ -6,6 +6,8 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from frappe import _
 
+from ec_production.ec_production.doctype.ec_job_order.ec_job_order import get_available_qty
+
 
 class ECProcessLot(Document):
 	def validate(self):
@@ -55,25 +57,19 @@ class ECProcessLot(Document):
 
 				processed_qty = sum(flt(row.qty) for row in processed_rows)
 
-				allowed_qty = frappe.db.get_value(
-					"EC Lot Item",
-					{
-						"parent": ec_lot,
-						"item": item,
-						"operation": operation
-					},
-					"qty"
-				) or 0
-
-				available_qty = flt(allowed_qty) - processed_qty
+				# Same capacity formula as EC Job Order: Lot Qty − Pending
+				# (unreceived, ordered qty) − Received, then further
+				# reduced by whatever other EC Process Lots have already
+				# processed against this same Lot/Item/Operation.
+				available_qty = flt(get_available_qty(ec_lot, item, operation)) - processed_qty
 
 				if assigned_qty > available_qty:
 
 					frappe.throw(_(
 						"Item <b>{0}</b> / Operation <b>{1}</b><br>"
-						"Already Processed: <b>{2}</b><br>"
+						"Already Processed (other Process Lots): <b>{2}</b><br>"
 						"Trying to Process: <b>{3}</b><br>"
-						"Available Qty: <b>{4}</b>"
+						"Available Qty (Lot Qty − Pending − Received − Already Processed): <b>{4}</b>"
 					).format(
 						item,
 						operation,
