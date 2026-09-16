@@ -53,7 +53,7 @@ class ECJobReceipt(Document):
 						"Item <b>{5}</b>, Lot <b>{6}</b>."
 					).format(
 						row.idx, row.qty_received, pending,
-						row.employee, row.operation, row.item, row.lot
+						row.employee_name, row.operation, row.item, row.lot
 					))
 				continue
 
@@ -109,7 +109,7 @@ class ECJobReceipt(Document):
 			frappe.throw(_(
 				"Row #{0}: No submitted Job Order found for Employee <b>{1}</b>, "
 				"Operation <b>{2}</b>, Item <b>{3}</b>, Lot <b>{4}</b>."
-			).format(row.idx, row.employee, row.operation, row.item, row.lot))
+			).format(row.idx, row.employee_name, row.operation, row.item, row.lot))
 
 		for jod in candidates:
 
@@ -123,7 +123,7 @@ class ECJobReceipt(Document):
 			"Employee <b>{2}</b>, Operation <b>{3}</b>, Item <b>{4}</b>, Lot <b>{5}</b> "
 			"(across all matching Job Order batches). Please split this into multiple "
 			"rows if receiving against multiple batches."
-		).format(row.idx, row.qty_received, row.employee, row.operation, row.item, row.lot))
+		).format(row.idx, row.qty_received, row.employee_name, row.operation, row.item, row.lot))
 
 	def get_other_received_qty(self, jod_id, row_name):
 		"""Qty Received already recorded against this JOD, from every
