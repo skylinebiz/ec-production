@@ -6,7 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from frappe import _
 
-from ec_production.ec_production.doctype.ec_job_order.ec_job_order import get_available_qty
+from ec_production.ec_production.doctype.ec_job_order.ec_job_order import get_available_qty, sync_lot_item_rollups
 
 
 class ECProcessLot(Document):
@@ -53,24 +53,12 @@ class ECProcessLot(Document):
 
 		for (ec_lot, item, operation), info in assigned.items():
 
-			processed_rows = frappe.get_all(
-				"EC Process Lot Item",
-				filters={
-					"ec_lot": ec_lot,
-					"item": item,
-					"operation": operation,
-					"parent": ["!=", self.name]
-				},
-				fields=["qty"]
-			)
-
-			processed_qty = sum(flt(row.qty) for row in processed_rows)
-
-			# Same capacity formula as EC Job Order: Lot Qty − Pending
-			# (unreceived, ordered qty) − Received, then further
-			# reduced by whatever other EC Process Lots have already
-			# processed against this same Lot/Item/Operation.
-			available_qty = flt(get_available_qty(ec_lot, item, operation)) - processed_qty
+			# Received Qty (rolled up onto EC Lot Item) already includes
+			# every other *submitted* EC Process Lot against this same
+			# Lot/Item/Operation (see sync_lot_item_rollups) — this
+			# document's own rows aren't submitted yet, so no further
+			# adjustment for "other rows" is needed.
+			available_qty = flt(get_available_qty(ec_lot, item, operation))
 
 			if info["qty"] > available_qty:
 
@@ -78,17 +66,32 @@ class ECProcessLot(Document):
 
 				capacity_errors.append(_(
 					"Row {0}: Item <b>{1}</b> / Operation <b>{2}</b><br>"
-					"Already Processed (other Process Lots): <b>{3}</b><br>"
-					"Trying to Process: <b>{4}</b><br>"
-					"Available Qty (Lot Qty − Pending − Received − Already Processed): <b>{5}</b>"
+					"Trying to Process: <b>{3}</b><br>"
+					"Available Qty (Lot Qty − Pending − Received): <b>{4}</b>"
 				).format(
 					row_numbers,
 					item,
 					operation,
-					processed_qty,
 					info["qty"],
 					max(available_qty, 0)
 				))
 
 		if capacity_errors:
 			frappe.throw("<br><br>".join(capacity_errors), title=_("Qty Exceeds Lot Availability"))
+
+	def on_submit(self):
+		self._sync_lot_rollups()
+
+	def on_cancel(self):
+		self._sync_lot_rollups()
+
+	def _sync_lot_rollups(self):
+
+		combos = {
+			(row.ec_lot, row.item, row.operation)
+			for row in self.lot_items
+			if row.ec_lot and row.item and row.operation
+		}
+
+		for ec_lot, item, operation in combos:
+			sync_lot_item_rollups(ec_lot, item, operation)

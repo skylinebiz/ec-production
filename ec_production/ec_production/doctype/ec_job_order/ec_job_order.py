@@ -139,8 +139,8 @@ def get_available_qty(lot, item, operation):
 def sync_lot_item_rollups(lot, item, operation):
 	"""Recompute the matching EC Lot Item row's Pending Qty and Received
 	Qty from current submitted EC Job Order Detail / EC Job Receipt
-	Detail data. Self-healing — always recomputed from scratch rather
-	than incremented, so it can't drift."""
+	Detail / EC Process Lot Item data. Self-healing — always recomputed
+	from scratch rather than incremented, so it can't drift."""
 
 	pending_qty = flt(frappe.db.sql("""
 		SELECT COALESCE(SUM(qty - qty_received), 0)
@@ -148,11 +148,31 @@ def sync_lot_item_rollups(lot, item, operation):
 		WHERE lot = %s AND item = %s AND operation = %s AND docstatus = 1
 	""", (lot, item, operation))[0][0])
 
-	received_qty = flt(frappe.db.sql("""
+	jr_received_qty = flt(frappe.db.sql("""
 		SELECT COALESCE(SUM(qty_received), 0)
 		FROM `tabEC Job Receipt Detail`
 		WHERE lot = %s AND item = %s AND operation = %s AND docstatus = 1
 	""", (lot, item, operation))[0][0])
+
+	# EC Process Lots already backfilled into a Job Receipt by the
+	# create_job_receipts_for_process_lots patch (marked with a comment
+	# on the Process Lot, same check as the patch's own _already_migrated)
+	# are excluded here — their qty is already counted above via
+	# jr_received_qty, so including them again would double-count. Only
+	# Process Lots submitted normally (never backfilled) contribute here.
+	pl_received_qty = flt(frappe.db.sql("""
+		SELECT COALESCE(SUM(pli.qty), 0)
+		FROM `tabEC Process Lot Item` pli
+		WHERE pli.ec_lot = %s AND pli.item = %s AND pli.operation = %s AND pli.docstatus = 1
+		AND NOT EXISTS (
+			SELECT 1 FROM `tabComment` c
+			WHERE c.reference_doctype = 'EC Process Lot'
+			AND c.reference_name = pli.parent
+			AND c.content LIKE '%%create_job_receipts_for_process_lots%%'
+		)
+	""", (lot, item, operation))[0][0])
+
+	received_qty = jr_received_qty + pl_received_qty
 
 	frappe.db.set_value(
 		"EC Lot Item",
