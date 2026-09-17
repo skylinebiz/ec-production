@@ -164,18 +164,9 @@ frappe.ui.form.on("EC Job Receipt Detail", {
 	},
 
 	async qty_received(frm, cdt, cdn) {
-
-		const row = locals[cdt][cdn];
-
-		if (row.__pending != null && flt(row.qty_received) > row.__pending) {
-
-			frappe.msgprint(
-				__("Qty Received cannot be greater than the Pending Qty of {0} for this batch.", [row.__pending])
-			);
-
-			await frappe.model.set_value(cdt, cdn, "qty_received", row.__pending);
-		}
-
+		// Pending-qty availability is only checked on submit (a single
+		// grouped error covering every offending row) — not while
+		// editing/saving a draft, so any qty can be entered here.
 		await calculate_amount(cdt, cdn);
 	}
 });

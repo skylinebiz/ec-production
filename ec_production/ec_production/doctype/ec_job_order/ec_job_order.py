@@ -69,9 +69,9 @@ class ECJobOrder(Document):
 
 				if flt(row.qty) > available:
 					capacity_errors.append(_(
-						"{0}. {1} - {2} - {3} - {4} can only use <b>{5}</b> qty"
+						"Row #{0}: {1} - {2} - {3} - {4} can only use <b>{5}</b> qty"
 					).format(
-						len(capacity_errors) + 1,
+						row.idx,
 						row.employee_name, row.lot, row.item, row.operation,
 						max(available, 0)
 					))

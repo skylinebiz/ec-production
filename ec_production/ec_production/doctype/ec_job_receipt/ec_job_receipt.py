@@ -30,24 +30,40 @@ class ECJobReceipt(Document):
 		self._sync_lot_rollups()
 
 	def _process_details(self, strict):
+		# Lenient (strict=False, called from validate() on every save):
+		# any row that can't be resolved/validated is just left as-is
+		# — no error. Strict (before_submit only): every offending row
+		# is collected and raised together as one grouped error,
+		# rather than failing on the first.
+
+		errors = []
 
 		for row in self.job_receipt_details:
 
 			if not (row.employee and row.operation and row.item and row.lot and row.qty_received):
 				continue
 
+			if self.flags.ignore_jod_resolution:
+				# Used by data-migration patches for historical receipts
+				# that have no corresponding EC Job Order to resolve
+				# against (e.g. backfilling from EC Process Lot). Rate/
+				# Amount and the Pending-qty check are skipped — the
+				# caller is expected to have set row.rate itself.
+				row.amount = flt(row.rate) * flt(row.qty_received)
+				continue
+
 			try:
 				jod = self._get_jod_for_row(row)
-			except frappe.ValidationError:
+			except frappe.ValidationError as e:
 				if strict:
-					raise
+					errors.append(str(e))
 				continue
 
 			pending = flt(jod.qty) - self.get_other_received_qty(jod.name, row.name)
 
 			if flt(row.qty_received) > pending:
 				if strict:
-					frappe.throw(_(
+					errors.append(_(
 						"Row #{0}: Qty Received <b>{1}</b> exceeds the Pending Qty of "
 						"<b>{2}</b> for Employee <b>{3}</b>, Operation <b>{4}</b>, "
 						"Item <b>{5}</b>, Lot <b>{6}</b>."
@@ -61,6 +77,9 @@ class ECJobReceipt(Document):
 			row.job_order = jod.parent
 			row.rate = flt(jod.rate)
 			row.amount = flt(row.rate) * flt(row.qty_received)
+
+		if errors:
+			frappe.throw("<br><br>".join(errors), title=_("Qty Exceeds Pending Availability"))
 
 	def _get_jod_for_row(self, row):
 		"""If a JOD Id is already attached (e.g. set by Job Order's
