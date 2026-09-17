@@ -43,11 +43,11 @@ frappe.ui.form.on("EC Process Lot", {
         update_totals(frm);
     },
 
-    async validate(frm) {
-
+    validate(frm) {
+        // Lot-capacity availability is only checked on submit (a
+        // single grouped error covering every offending row) — not
+        // while editing/saving a draft.
         update_totals(frm);
-        await validate_assigned_qty(frm);
-
     }
 });
 
@@ -100,47 +100,6 @@ function populate_row(cdt, cdn, data) {
         );
 
     }, 50);
-}
-
-
-async function validate_assigned_qty(frm) {
-
-    let assigned = {};
-
-    (frm.doc.lot_items || []).forEach(row => {
-
-        if (!row.ec_lot || !row.item || !row.operation) {
-            return;
-        }
-
-        const key = `${row.ec_lot}||${row.item}||${row.operation}`;
-
-        assigned[key] = (assigned[key] || 0) + flt(row.qty);
-    });
-
-    for (const key in assigned) {
-
-        const [ec_lot, item, operation] = key.split("||");
-
-        const lot = await frappe.db.get_doc("EC Lot", ec_lot);
-
-        const source = (lot.ec_lot_item || []).find(
-            d =>
-                d.item === item &&
-                d.operation === operation
-        );
-
-        if (!source) {
-            continue;
-        }
-
-        if (assigned[key] > flt(source.qty)) {
-
-            frappe.throw(
-                `${item} / ${operation}: Assigned Qty ${assigned[key]} exceeds Available Qty ${source.qty}`
-            );
-        }
-    }
 }
 
 

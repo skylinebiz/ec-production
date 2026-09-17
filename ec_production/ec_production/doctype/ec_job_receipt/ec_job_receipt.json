@@ -1,28 +1,17 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "prompt",
- "creation": "2026-06-03 11:32:50.743788",
+ "autoname": "EC-JR-.YYYY.-.#####",
+ "creation": "2026-09-11 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "date",
-  "column_break_atlp",
-  "closed",
-  "section_break_sehp",
-  "ec_lot_item",
-  "section_break_yari",
-  "total_qty",
-  "column_break_ibyx",
-  "remarks"
+  "amended_from",
+  "section_break_jr01",
+  "job_receipt_details"
  ],
  "fields": [
-  {
-   "fieldname": "ec_lot_item",
-   "fieldtype": "Table",
-   "label": "EC Lot Item",
-   "options": "EC Lot Item"
-  },
   {
    "default": "Today",
    "fieldname": "date",
@@ -32,49 +21,35 @@
    "reqd": 1
   },
   {
-   "fieldname": "section_break_sehp",
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "EC Job Receipt",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_jr01",
    "fieldtype": "Section Break"
   },
   {
-   "fieldname": "section_break_yari",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "total_qty",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Total Qty",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_ibyx",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "remarks",
-   "fieldtype": "Small Text",
-   "label": "Remarks"
-  },
-  {
-   "fieldname": "column_break_atlp",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "0",
-   "fieldname": "closed",
-   "fieldtype": "Check",
-   "in_list_view": 1,
-   "label": "Closed"
+   "fieldname": "job_receipt_details",
+   "fieldtype": "Table",
+   "label": "Job Receipt Details",
+   "options": "EC Job Receipt Detail"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
+ "is_submittable": 1,
  "links": [],
- "modified": "2026-09-14 17:37:45.745832",
+ "modified": "2026-09-16 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Ec Production",
- "name": "EC Lot",
- "naming_rule": "Set by user",
+ "name": "EC Job Receipt",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
   {
@@ -123,5 +98,6 @@
  "rows_threshold_for_grid_search": 20,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "track_changes": 1
 }

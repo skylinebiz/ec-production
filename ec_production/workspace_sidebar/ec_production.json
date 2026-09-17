@@ -100,6 +100,30 @@
    "type": "Link"
   },
   {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "list",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "EC Job Order",
+   "link_to": "EC Job Order",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "list",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "EC Job Receipt",
+   "link_to": "EC Job Receipt",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
    "child": 0,
    "collapsible": 1,
    "icon": "list",
@@ -147,7 +171,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-06-04 18:06:02.037536",
+ "modified": "2026-09-16 16:58:16.104024",
  "modified_by": "Administrator",
  "module": "Ec Production",
  "name": "EC Production",

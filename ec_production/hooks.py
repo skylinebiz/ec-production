@@ -13,11 +13,20 @@ app_license = "mit"
 # up unrelated Custom DocPerm rows from other apps/customizations.
 
 fixtures = [
+	# {
+	# 	"dt": "Custom DocPerm",
+	# 	"filters": [
+	# 		["parent", "in", ["Operation", "Employee"]],
+	# 		["role", "in", ["Sales User", "Purchase User", "Sales Manager", "Purchase Manager"]],
+	# 	],
+	# },
 	{
-		"dt": "Custom DocPerm",
+		# Makes Employee Links (link fields, grid columns, dropdowns)
+		# display the employee's name instead of the raw HR-EMP-#### id.
+		"dt": "Property Setter",
 		"filters": [
-			["parent", "in", ["Operation", "Employee"]],
-			["role", "in", ["Sales User", "Purchase User", "Sales Manager", "Purchase Manager"]],
+			["doc_type", "=", "Employee"],
+			["property", "=", "show_title_field_in_link"],
 		],
 	}
 ]
