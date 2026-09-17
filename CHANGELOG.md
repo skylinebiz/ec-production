@@ -3,6 +3,41 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.0] - 2026-09-17
+
+### Added
+- `EC Job Order` and `EC Job Receipt` — new submittable doctypes, each with a child table
+  (`Job Order Details` / `Job Receipt Details`) that cascades Employee → Lot → Item → Operation,
+  matching the selection pattern already used on `EC Process Lot`. At least one row is required
+  before either can be submitted.
+- `EC Job Order` gets a "Process Receipt" button once submitted — creates and submits a matching
+  `EC Job Receipt` for whatever's still pending on that Job Order in one click.
+- `Total Qty` rollup field on `EC Job Order`, kept in sync as rows are added/removed.
+- Lot-capacity validation — `Lot Qty − Pending Qty − Received Qty` — enforced on `EC Job Order`,
+  `EC Job Receipt`, and `EC Process Lot`. Checked only at submit time, not while editing or saving a
+  draft, and reported as a single grouped error listing every offending row (by its real grid row
+  number) instead of stopping at the first.
+- `EC Process Lot` submit/cancel now updates `EC Lot Item`'s Received Qty directly, the same way
+  `EC Job Receipt` already did — so lots processed without going through a Job Order/Job Receipt
+  still roll up correctly.
+- Property Setter fixture (`show_title_field_in_link` on `Employee`) so Employee link fields, grid
+  columns, and dropdowns display the employee's name instead of the raw ID.
+
+### Changed
+- Error messages show the Employee's name instead of the raw Employee ID.
+- `employee_name` is hidden on `EC Job Receipt Detail`'s grid (still shown on `EC Job Order Detail`'s
+  grid).
+- Permission model on `EC Item Operation Rate`, `EC Lot`, `EC Process Lot`, `EC Job Order`, and
+  `EC Job Receipt` replaced: `Sales User` / `Purchase User` / `Sales Manager` / `Purchase Manager`
+  are out, `Manufacturing Manager` and `Manufacturing User` are in (alongside `System Manager`).
+  Sites relying on the old Sales/Purchase roles for access should review the new grants before
+  upgrading.
+
+### Removed
+- The one-time `create_job_receipts_for_process_lots` data-migration patch used during development
+  to backfill historical `EC Process Lot` activity into `EC Job Receipt` — it was never part of a
+  shipped release and is not included going forward.
+
 ## [2.1.0] - 2026-09-14
 
 ### Added
