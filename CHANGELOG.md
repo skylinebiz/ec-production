@@ -3,6 +3,15 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.0] - 2026-09-18
+
+### Changed
+- `Voucher Report`, `Payment Report`, and `Data Rate Report` are now accessible to `Manufacturing
+  Manager` and `Manufacturing User`, alongside `System Manager` (previously `System Manager` only,
+  plus a stray `Administrator` entry on `Payment Report` which was removed). Editing a report's
+  definition (columns/query) remains restricted to `System Manager` via Frappe's core
+  `is_report_manager` check — unaffected by this change.
+
 ## [3.0.0] - 2026-09-17
 
 ### Added
