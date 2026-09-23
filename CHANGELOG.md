@@ -3,6 +3,27 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.2.0] - 2026-09-22
+
+### Added
+- Rate lock on `EC Process Lot`: only `Manufacturing Manager` (and `System Manager`, always) may
+  change a row's `rate`. Enforced both on the form (the field is made read-only) and on save (a
+  non-manager's row keeps its previously-saved rate, or the amended document's rate on an
+  amendment, or the `EC Lot`'s rate for any other row) — the server-side check can't be bypassed via
+  the API.
+- "Advanced Search" button on the `EC Lot` items grid, opening a popup to bulk-populate rows:
+  - Select one or more Operations and a Date; results show the rate for every selected Operation as
+    of that date.
+  - Filter by Item Group (including sub-groups), by Style No (an Item with variants — narrows
+    results to that template's variants), and by a type-to-search, scrollable filter per Item
+    Attribute defined in the system (e.g. Colour, Size).
+  - Entering a Qty against a result and clicking "Add to Lot" adds one row per item × operation;
+    an item/operation pair that's already a row on the lot gets its Qty added instead of a
+    duplicate row.
+  - `ec_production.ec_production.doctype.ec_lot.ec_lot.get_rate` now falls back to a variant's
+    template rate when the variant has no rate of its own, so this also improves manual row entry
+    on `EC Lot` (previously gave a rate of 0 for such variants).
+
 ## [3.1.0] - 2026-09-18
 
 ### Changed

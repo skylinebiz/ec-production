@@ -6,7 +6,11 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from frappe import _
 
-from ec_production.ec_production.doctype.ec_job_order.ec_job_order import get_available_qty, sync_lot_item_rollups
+from ec_production.ec_production.doctype.ec_job_order.ec_job_order import (
+	get_available_qty,
+	get_lot_item_details,
+	sync_lot_item_rollups,
+)
 
 
 class ECProcessLot(Document):
@@ -18,6 +22,8 @@ class ECProcessLot(Document):
 
 		# for row in self.lot_items:
 		# 	row.process_lot_date = self.date
+
+		self.lock_rates()
 
 		self.total_qty = 0
 		self.total_amount = 0
@@ -31,6 +37,38 @@ class ECProcessLot(Document):
 
 			self.total_qty += row.qty
 			self.total_amount += row.amount
+
+	def lock_rates(self):
+		"""
+		Only Manufacturing Managers may change a rate. For anyone else a
+		row keeps the rate it was saved with (or, on an amendment, the
+		rate on the amended document); a row with no such history gets
+		the EC Lot's rate. The form makes the field read-only too, but
+		that alone can be bypassed via the API.
+		"""
+
+		if "Manufacturing Manager" in frappe.get_roles():
+			return
+
+		previous = self.get_doc_before_save()
+		previous_rows = {row.name: row for row in previous.lot_items} if previous else {}
+
+		amended_rates = {}
+		if not previous and self.amended_from:
+			for row in frappe.get_doc("EC Process Lot", self.amended_from).lot_items:
+				amended_rates.setdefault((row.ec_lot, row.item, row.operation), row.rate)
+
+		for row in self.lot_items:
+
+			key = (row.ec_lot, row.item, row.operation)
+			old = previous_rows.get(row.name)
+
+			if old and (old.ec_lot, old.item, old.operation) == key:
+				row.rate = old.rate
+			elif key in amended_rates:
+				row.rate = amended_rates[key]
+			else:
+				_qty, row.rate = get_lot_item_details(*key)
 
 	def before_submit(self):
 

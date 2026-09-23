@@ -36,6 +36,7 @@ frappe.ui.form.on("EC Process Lot", {
     },
 
     refresh(frm) {
+        lock_rates(frm);
         update_totals(frm);
     },
 
@@ -50,6 +51,22 @@ frappe.ui.form.on("EC Process Lot", {
         update_totals(frm);
     }
 });
+
+
+// Only Manufacturing Managers may change rates; for everyone else the
+// rate is whatever the EC Lot carries (enforced again on the server).
+function lock_rates(frm) {
+
+    if (frappe.user.has_role("Manufacturing Manager")) {
+        return;
+    }
+
+    frm.fields_dict.lot_items.grid.update_docfield_property(
+        "rate",
+        "read_only",
+        1
+    );
+}
 
 
 function calculate_amount(cdt, cdn) {
