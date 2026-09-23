@@ -75,7 +75,7 @@ function show_advanced_search(frm, attributes) {
     });
 
     const d = new frappe.ui.Dialog({
-        title: __("Advanced Search"),
+        title: __("Advanced Search (Item Variant)"),
         size: "extra-large",
         fields: [
             {
@@ -188,9 +188,8 @@ function show_advanced_search(frm, attributes) {
 
             const rate_cells = operations.map(op => {
                 const rate = flt(item.rates[op]);
-                return `<td class="text-right ${rate ? "" : "text-muted"}">${
-                    rate ? format_currency(rate) : "-"
-                }</td>`;
+                return `<td class="text-right ${rate ? "" : "text-muted"}">${rate ? format_currency(rate) : "-"
+                    }</td>`;
             }).join("");
 
             const attribute_cells = attributes
@@ -212,9 +211,8 @@ function show_advanced_search(frm, attributes) {
         }).join("");
 
         $results.html(`
-            ${has_more ? `<p class="text-muted">${
-                __("Showing the first {0} items. Narrow the search to see more.", [results.length])
-            }</p>` : ""}
+            ${has_more ? `<p class="text-muted">${__("Showing the first {0} items. Narrow the search to see more.", [results.length])
+                }</p>` : ""}
             <div style="max-height:45vh; overflow:auto;">
                 <table class="table table-bordered table-sm">
                     <thead>
