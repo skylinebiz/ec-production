@@ -102,7 +102,7 @@ function update_totals(frm) {
 function populate_row(cdt, cdn, data) {
 
     frappe.model.set_value(cdt, cdn, "operation", data.operation);
-    frappe.model.set_value(cdt, cdn, "qty", data.qty);
+    // frappe.model.set_value(cdt, cdn, "qty", data.qty);
     frappe.model.set_value(cdt, cdn, "rate", data.rate);
 
     setTimeout(() => {
