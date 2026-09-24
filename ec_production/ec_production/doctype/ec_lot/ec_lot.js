@@ -26,10 +26,13 @@ frappe.ui.form.on("EC Lot", {
     refresh(frm) {
         update_total_qty(frm);
 
-        frm.fields_dict.ec_lot_item.grid.add_custom_button(
+        const grid = frm.fields_dict.ec_lot_item.grid;
+
+        // add_custom_button prepends; move it after Delete / Duplicate row
+        grid.add_custom_button(
             __("Advanced Search"),
             () => open_advanced_search(frm)
-        );
+        ).appendTo(grid.grid_buttons);
     },
 
     validate(frm) {

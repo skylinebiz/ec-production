@@ -24,11 +24,18 @@ fixtures = [
 		# Makes Employee Links (link fields, grid columns, dropdowns)
 		# display the employee's name instead of the raw HR-EMP-#### id.
 		"dt": "Property Setter",
-		"filters": [
-			["doc_type", "=", "Employee"],
-			["property", "=", "show_title_field_in_link"],
+		 "filters": [
+			["module", "in", ["Ec Production"]]
 		],
-	}
+	},
+	{
+		# EC Lot link on Stock Entry, mandatory for the Material
+		# Consumption / Transfer for Manufacture entry types.
+		"dt": "Custom Field",
+		 "filters": [
+			["module", "in", ["Ec Production"]]
+		],
+	},
 ]
 
 # Apps
