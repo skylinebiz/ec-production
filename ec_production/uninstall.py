@@ -26,6 +26,10 @@ def before_uninstall():
 
 	remove_custom_docperm(FOREIGN_DOCPERM_PARENTS, FOREIGN_DOCPERM_ROLES)
 
+	# The `EC Lot` link on Stock Entry would otherwise be left pointing at
+	# a doctype that no longer exists.
+	remove_custom_field_and_property_setters()
+
 
 def remove_custom_docperm(parents, roles):
 	names = frappe.get_all(
@@ -39,3 +43,38 @@ def remove_custom_docperm(parents, roles):
 
 	if names:
 		frappe.db.commit()
+
+def remove_custom_field_and_property_setters():
+    module = "Ec Production"
+
+    # Delete custom fields and their property setters
+    custom_fields = frappe.get_all(
+        "Custom Field",
+        filters={"module": module},
+        fields=["name", "dt", "fieldname"],
+    )
+
+    for cf in custom_fields:
+        # Delete the Custom Field
+        frappe.delete_doc(
+            "Custom Field",
+            cf.name,
+            ignore_permissions=True,
+            force=True,
+        )
+
+    property_setters = frappe.get_all(
+        "Property Setter",
+        filters={"module": module},
+        pluck="name",
+    )
+
+    for ps in property_setters:
+        frappe.delete_doc(
+            "Property Setter",
+            ps,
+            ignore_permissions=True,
+            force=True,
+        )
+
+    frappe.clear_cache()
