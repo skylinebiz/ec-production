@@ -11,6 +11,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   different Item/Operation — enforced on save (`ECLot.validate_used_rows`) so it can't be bypassed
   via the API, with the grid's own `before_ec_lot_item_remove` event giving the same feedback
   immediately, before Save.
+- `EC Lot` (Link) field added to `Stock Entry` (via Custom Field fixture), mandatory only for
+  Stock Entry Type `Material Consumption for Manufacture` and `Material Transfer for Manufacture`.
+  Enforced both on the form (`mandatory_depends_on`) and on save
+  (`ec_production.api.stock_entry.validate_ec_lot`, registered as a `doc_events` hook) so it can't
+  be skipped via the API; `ignore_mandatory` still bypasses it, same as any other mandatory field.
 
 ## [3.2.2] - 2026-09-24
 
