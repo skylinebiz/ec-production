@@ -8,10 +8,20 @@ from frappe.utils.nestedset import get_descendants_of
 from frappe import _
 
 
+# Child rows that point at an EC Lot Item by (lot, item, operation):
+# (child doctype, its lot field, parent doctype)
+LOT_ITEM_REFERENCES = (
+	("EC Process Lot Item", "ec_lot", "EC Process Lot"),
+	("EC Job Order Detail", "lot", "EC Job Order"),
+	("EC Job Receipt Detail", "lot", "EC Job Receipt"),
+)
+
+
 class ECLot(Document):
 
 	def validate(self):
 		self.set_rates()
+		self.validate_used_rows()
 		self.validate_used_qty()
 		self.calculate_totals()
 
@@ -29,6 +39,36 @@ class ECLot(Document):
 			flt(row.qty)
 			for row in self.ec_lot_item
 		)
+
+	def validate_used_rows(self):
+		"""
+		Frappe drops child rows removed from a saved document without any
+		link check, so guard it here: an Item/Operation already used in a
+		Process Lot, Job Order or Job Receipt can't be deleted, nor changed
+		to another Item/Operation (which would orphan those documents).
+		"""
+
+		previous = self.get_doc_before_save()
+
+		if not previous:
+			return
+
+		remaining = {(row.item, row.operation) for row in self.ec_lot_item}
+
+		for row in previous.ec_lot_item:
+
+			if (row.item, row.operation) in remaining:
+				continue
+
+			used_in = get_lot_item_usage(self.name, row.item, row.operation)
+
+			if used_in:
+				frappe.throw(
+					_(
+						"Cannot remove or change Item <b>{0}</b> ({1}) — it is already "
+						"used in: {2}."
+					).format(row.item, row.operation, ", ".join(used_in))
+				)
 
 	def validate_used_qty(self):
 		"""
@@ -74,6 +114,26 @@ class ECLot(Document):
 def get_rate(item, operation, date):
 
     return flt(get_rates([item], [operation], date).get((item, operation)))
+
+
+@frappe.whitelist()
+def get_lot_item_usage(lot, item, operation):
+    """
+    Parent doctypes (Process Lot / Job Order / Job Receipt) that already
+    have a row against this Lot/Item/Operation, in any status. Empty when
+    the EC Lot Item row is free to delete.
+    """
+
+    frappe.has_permission("EC Lot", "read", throw=True)
+
+    return [
+        parent
+        for child, lot_field, parent in LOT_ITEM_REFERENCES
+        if frappe.db.exists(
+            child,
+            {lot_field: lot, "item": item, "operation": operation}
+        )
+    ]
 
 
 def get_rates(items, operations, date):

@@ -12,6 +12,39 @@ frappe.ui.form.on("EC Lot Item", {
 });
 
 frappe.ui.form.on("EC Lot Item", {
+    // Native grid hook: a rejected promise aborts the row removal. The
+    // server refuses it as well (ECLot.validate_used_rows) — this just
+    // says so straight away instead of on Save.
+    before_ec_lot_item_remove(frm, cdt, cdn) {
+
+        const row = locals[cdt][cdn];
+
+        if (frm.is_new() || !row.item || !row.operation) {
+            return;
+        }
+
+        return frappe.call({
+            method: "ec_production.ec_production.doctype.ec_lot.ec_lot.get_lot_item_usage",
+            args: {
+                lot: frm.doc.name,
+                item: row.item,
+                operation: row.operation
+            }
+        }).then(({ message }) => {
+
+            if (message && message.length) {
+                frappe.throw(
+                    __("Row {0}: {1} ({2}) is already used in {3} and cannot be deleted.", [
+                        row.idx,
+                        row.item,
+                        row.operation,
+                        message.join(", ")
+                    ])
+                );
+            }
+        });
+    },
+
     ec_lot_item_remove(frm) {
 
         setTimeout(() => {

@@ -3,6 +3,36 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.2.3] - 2026-09-28
+
+### Added
+- `EC Lot`: an Item/Operation row already referenced by an `EC Process Lot`, `EC Job Order`, or
+  `EC Job Receipt` (in any status, including drafts) can no longer be deleted or re-pointed to a
+  different Item/Operation — enforced on save (`ECLot.validate_used_rows`) so it can't be bypassed
+  via the API, with the grid's own `before_ec_lot_item_remove` event giving the same feedback
+  immediately, before Save.
+- `EC Lot` (Link) field added to `Stock Entry` (via Custom Field fixture), mandatory only for
+  Stock Entry Type `Material Consumption for Manufacture` and `Material Transfer for Manufacture`.
+  Enforced both on the form (`mandatory_depends_on`) and on save
+  (`ec_production.api.stock_entry.validate_ec_lot`, registered as a `doc_events` hook) so it can't
+  be skipped via the API; `ignore_mandatory` still bypasses it, same as any other mandatory field.
+
+## [3.2.2] - 2026-09-24
+
+### Changed
+- "Advanced Search" button on the `EC Lot` items grid moved after "Delete row" / "Duplicate row"
+  (`add_custom_button` prepends by default).
+- Fixture filters for `Property Setter` and `Custom Field` broadened to export by `module` (`Ec
+  Production`) instead of listing each one by name/doctype, so future Property Setters or Custom
+  Fields added under this app's module are picked up automatically.
+
+## [3.2.1] - 2026-09-24
+
+### Changed
+- `EC Process Lot`: picking an Item/Operation from the linked `EC Lot` no longer auto-populates
+  Qty — only Operation and Rate are still fetched. Qty is entered manually.
+- `EC Lot` Advanced Search dialog retitled to "Advanced Search (Item Variant)".
+
 ## [3.2.0] - 2026-09-22
 
 ### Added

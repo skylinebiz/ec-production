@@ -196,6 +196,12 @@ before_uninstall = "ec_production.uninstall.before_uninstall"
 # 	}
 # }
 
+doc_events = {
+	"Stock Entry": {
+		"validate": "ec_production.api.stock_entry.validate_ec_lot",
+	},
+}
+
 # Scheduled Tasks
 # ---------------
 
