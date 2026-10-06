@@ -3,6 +3,17 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.2.4] - 2026-10-06
+
+### Added
+- Track Changes (version history) enabled on `EC Lot` and `EC Item Operation Rate`, so edits to
+  lots and rates — who changed what, and when — show up in each document's timeline.
+
+### Changed
+- Removed the Submit / Cancel / Amend permission flags from `EC Lot` and `EC Item Operation Rate`
+  for `System Manager`, `Manufacturing Manager`, and `Manufacturing User`. Neither doctype is
+  submittable, so this has no effect on what users can do; it just tidies the permission rows.
+
 ## [3.2.3] - 2026-09-28
 
 ### Added
