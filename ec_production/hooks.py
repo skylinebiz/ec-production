@@ -5,6 +5,15 @@ app_description = "EC"
 app_email = "support@skylinebiz.in"
 app_license = "mit"
 
+app_home = "/desk/ec-production/ec-item-operation-rate"
+
+add_to_apps_screen = [
+    {
+        "name": app_name,
+        "title": app_title,
+        "route": app_home,
+    }
+]
 # Fixtures
 # --------
 # Custom DocPerm rows added via Customize Form for standard doctypes

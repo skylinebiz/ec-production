@@ -3,6 +3,39 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.3.0] - 2026-10-12
+
+### Added
+- `Lot Report` — a new standard Script Report on `EC Process Lot` that takes an `EC Lot` (mandatory,
+  checked on the server as well as in the filter) and lists every Process Lot entry made against
+  it, laid out like the Voucher Report: Date, Process Lot (link), Status (Draft / Submitted),
+  Employee, EC Lot, Item, Operation, Qty, Rate, Amount, and Remarks, with a Total row summing Qty,
+  Rate and Amount. An "Include Drafts" checkbox (ticked by default) controls whether draft Process
+  Lots are listed; cancelled ones never are. Available to `System Manager`, `Manufacturing
+  Manager`, and `Manufacturing User`.
+- "Reports → Lot Report" link in the Connections panel of every `EC Lot` (new
+  `ec_lot_dashboard.py`); it opens the report with that lot already filled in.
+- Sidebar entry for `Lot Report` under Reports.
+
+### Changed
+- App navigation now uses a `Ec Production` Workspace Sidebar (EC Item Operation Rate, EC Lot, EC
+  Process Lot, EC Job Order, EC Job Receipt; Reports: Data Rate Report, Voucher Report Builder,
+  Payment Report, Voucher Report, Lot Report; and the Production Processor page), and the app is
+  registered on the apps screen (`add_to_apps_screen`, opening `EC Item Operation Rate`). The
+  standalone `Desktop Icon` definition (`desktop_icon/ec_production.json`) was removed.
+- Requires `bench migrate` to create the report and sync the sidebar.
+
+## [3.2.4] - 2026-10-06
+
+### Added
+- Track Changes (version history) enabled on `EC Lot` and `EC Item Operation Rate`, so edits to
+  lots and rates — who changed what, and when — show up in each document's timeline.
+
+### Changed
+- Removed the Submit / Cancel / Amend permission flags from `EC Lot` and `EC Item Operation Rate`
+  for `System Manager`, `Manufacturing Manager`, and `Manufacturing User`. Neither doctype is
+  submittable, so this has no effect on what users can do; it just tidies the permission rows.
+
 ## [3.2.3] - 2026-09-28
 
 ### Added
