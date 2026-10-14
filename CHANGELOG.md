@@ -3,6 +3,23 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.0] - 2026-10-14
+
+### Added
+- `EC Process Lot Item`: `Pay By` (Select: `Qty` — the default — or `Time`) and `Time (in hrs)`.
+  The amount is Rate × Time when Pay By is Time, and Rate × Qty otherwise, calculated live on the
+  form and again on save so entries made through the API follow the same rule. `Time (in hrs)` is
+  shown and required only when Pay By is Time.
+- A clock icon next to the Amount in the Process Lot grid marks rows paid by Time (tooltip "Paid by
+  Time").
+
+### Changed
+- `Pay By` and `Time (in hrs)` are not grid columns; they are set in the row's edit form.
+- Qty is still recorded on rows paid by Time and still counts toward Total Qty and the lot-capacity
+  checks — only the basis of the Amount changes.
+- Existing entries, draft and submitted, are paid by Qty (the field's default fills them when
+  migrating), so their Amounts are unchanged. Requires `bench migrate`.
+
 ## [3.3.0] - 2026-10-12
 
 ### Added
