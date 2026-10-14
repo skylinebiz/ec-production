@@ -4,6 +4,12 @@
 frappe.ui.form.on("EC Process Lot", {
 
     setup(frm) {
+        const amount_df = frappe.meta.get_docfield("EC Process Lot Item", "amount");
+
+        if (amount_df) {
+            amount_df.formatter = amount_formatter;
+        }
+
         frm.set_query("ec_lot", "lot_items", function () {
             return {
                 filters: {
@@ -69,16 +75,44 @@ function lock_rates(frm) {
 }
 
 
-function calculate_amount(cdt, cdn) {
+// Pay By Time: Rate x Time (hrs); otherwise (Qty, the default) Rate x Qty
+function get_amount(row) {
 
-    const row = locals[cdt][cdn];
+    const basis = row.pay_by === "Time" ? flt(row.time) : flt(row.qty);
+
+    return basis * flt(row.rate);
+}
+
+
+function calculate_amount(cdt, cdn) {
 
     frappe.model.set_value(
         cdt,
         cdn,
         "amount",
-        flt(row.qty) * flt(row.rate)
+        get_amount(locals[cdt][cdn])
     );
+}
+
+
+// Amount cell in the grid: a clock icon marks rows that are paid by Time
+function amount_formatter(value, df, options, doc) {
+
+    const amount = frappe.form.get_formatter("Currency")(
+        value,
+        df,
+        { ...options, inline: 1 },
+        doc
+    );
+
+    if (!doc || doc.pay_by !== "Time") {
+        return `<div style="text-align: right">${amount}</div>`;
+    }
+
+    return `<div style="text-align: right">
+        <span title="${__("Paid by Time")}">${frappe.utils.icon("clock", "sm")}</span>
+        ${amount}
+    </div>`;
 }
 
 
@@ -113,7 +147,7 @@ function populate_row(cdt, cdn, data) {
             cdt,
             cdn,
             "amount",
-            flt(row.qty) * flt(row.rate)
+            get_amount(row)
         );
 
     }, 50);
@@ -207,6 +241,24 @@ frappe.ui.form.on("EC Process Lot Item", {
     },
 
     rate(frm, cdt, cdn) {
+
+        calculate_amount(cdt, cdn);
+
+        setTimeout(() => {
+            update_totals(frm);
+        }, 50);
+    },
+
+    time(frm, cdt, cdn) {
+
+        calculate_amount(cdt, cdn);
+
+        setTimeout(() => {
+            update_totals(frm);
+        }, 50);
+    },
+
+    pay_by(frm, cdt, cdn) {
 
         calculate_amount(cdt, cdn);
 
