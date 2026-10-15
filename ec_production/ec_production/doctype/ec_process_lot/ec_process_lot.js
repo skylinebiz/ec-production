@@ -46,10 +46,6 @@ frappe.ui.form.on("EC Process Lot", {
         update_totals(frm);
     },
 
-    lot_items_remove(frm) {
-        update_totals(frm);
-    },
-
     validate(frm) {
         // Lot-capacity availability is only checked on submit (a
         // single grouped error covering every offending row) — not
@@ -139,18 +135,7 @@ function populate_row(cdt, cdn, data) {
     // frappe.model.set_value(cdt, cdn, "qty", data.qty);
     frappe.model.set_value(cdt, cdn, "rate", data.rate);
 
-    setTimeout(() => {
-
-        const row = locals[cdt][cdn];
-
-        frappe.model.set_value(
-            cdt,
-            cdn,
-            "amount",
-            get_amount(row)
-        );
-
-    }, 50);
+    calculate_amount(cdt, cdn);
 }
 
 
@@ -232,50 +217,36 @@ frappe.ui.form.on("EC Process Lot Item", {
     },
 
     qty(frm, cdt, cdn) {
-
         calculate_amount(cdt, cdn);
-
-        setTimeout(() => {
-            update_totals(frm);
-        }, 50);
+        update_totals(frm);
     },
 
     rate(frm, cdt, cdn) {
-
         calculate_amount(cdt, cdn);
-
-        setTimeout(() => {
-            update_totals(frm);
-        }, 50);
+        update_totals(frm);
     },
 
     time(frm, cdt, cdn) {
-
         calculate_amount(cdt, cdn);
-
-        setTimeout(() => {
-            update_totals(frm);
-        }, 50);
+        update_totals(frm);
     },
 
     pay_by(frm, cdt, cdn) {
-
         calculate_amount(cdt, cdn);
-
-        setTimeout(() => {
-            update_totals(frm);
-        }, 50);
+        update_totals(frm);
     }
 });
 
 frappe.ui.form.on("EC Process Lot Item", {
 
+    // Duplicating rows updates total
+    lot_items_add(frm) {
+        update_totals(frm);
+    },
+
+    // Removing rows updates total
     lot_items_remove(frm) {
-
-        setTimeout(() => {
-            update_totals(frm);
-        }, 100);
-
+        update_totals(frm);
     }
 
 });
