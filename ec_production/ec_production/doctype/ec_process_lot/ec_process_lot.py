@@ -32,8 +32,22 @@ class ECProcessLot(Document):
 
 			row.qty = flt(row.qty)
 			row.rate = flt(row.rate)
+			row.time = flt(row.time)
 
-			row.amount = row.qty * row.rate
+			# Rows saved before Pay By existed have no value: paid by Qty
+			row.pay_by = row.pay_by or "Qty"
+
+			if row.pay_by == "Time":
+
+				if not row.time:
+					frappe.throw(
+						_("Row {0}: Time (in hrs) is required when Pay By is Time").format(row.idx)
+					)
+
+				row.amount = row.time * row.rate
+
+			else:
+				row.amount = row.qty * row.rate
 
 			self.total_qty += row.qty
 			self.total_amount += row.amount

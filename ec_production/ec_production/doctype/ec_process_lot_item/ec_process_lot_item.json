@@ -12,6 +12,8 @@
   "operation",
   "rate",
   "qty",
+  "pay_by",
+  "time",
   "amount",
   "remarks"
  ],
@@ -62,6 +64,21 @@
    "label": "Qty"
   },
   {
+   "default": "Qty",
+   "fieldname": "pay_by",
+   "fieldtype": "Select",
+   "label": "Pay By",
+   "options": "Qty\nTime"
+  },
+  {
+   "depends_on": "eval:doc.pay_by==\"Time\"",
+   "fieldname": "time",
+   "fieldtype": "Float",
+   "label": "Time (in hrs)",
+   "mandatory_depends_on": "eval:doc.pay_by==\"Time\"",
+   "non_negative": 1
+  },
+  {
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -79,7 +96,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-06-05 17:10:32.414036",
+ "modified": "2026-10-14 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Ec Production",
  "name": "EC Process Lot Item",
