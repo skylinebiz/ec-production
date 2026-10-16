@@ -3,6 +3,14 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.0] - 2026-10-16
+
+### Changed
+- `EC Lot`: "Duplicate rows" in the item grid is blocked for any selected row that already has
+  Received Qty or Pending Qty greater than 0. The error names each offending row (row no - Item -
+  Operation) and the reason; nothing is duplicated if any selected row is blocked. The check is on
+  the form only, so imports and API inserts are not affected.
+
 ## [3.4.0] - 2026-10-14
 
 ### Added
