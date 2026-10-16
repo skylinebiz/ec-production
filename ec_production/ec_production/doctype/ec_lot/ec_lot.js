@@ -61,6 +61,8 @@ frappe.ui.form.on("EC Lot", {
 
         const grid = frm.fields_dict.ec_lot_item.grid;
 
+        guard_duplicate_rows(grid);
+
         // add_custom_button prepends; move it after Delete / Duplicate row
         grid.add_custom_button(
             __("Advanced Search"),
@@ -73,6 +75,40 @@ frappe.ui.form.on("EC Lot", {
     }
 
 });
+
+// Rows that already have received or pending qty are in progress and
+// must not be cloned. Wraps the grid's own "Duplicate rows" action.
+function guard_duplicate_rows(grid) {
+
+    if (grid._duplicate_guarded) {
+        return;
+    }
+    grid._duplicate_guarded = true;
+
+    const duplicate_rows = grid.duplicate_rows.bind(grid);
+
+    grid.duplicate_rows = function () {
+
+        const blocked = grid.get_selected_children().filter(
+            row => flt(row.received_qty) > 0 || flt(row.pending_qty) > 0
+        );
+
+        if (blocked.length) {
+            const lines = blocked.map(row => {
+                const reason = flt(row.received_qty) > 0
+                    ? __("Received Qty is already marked")
+                    : __("Pending Qty is already marked");
+                return __("Row {0} - {1} - {2}: {3}, so it cannot be duplicated.", [
+                    row.idx, row.item, row.operation, reason
+                ]);
+            });
+
+            frappe.throw(lines.join("<br>"));
+        }
+
+        duplicate_rows();
+    };
+}
 
 function open_advanced_search(frm) {
 
