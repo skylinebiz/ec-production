@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [3.5.0] - 2026-10-16
 
+### Added
+- `EC Process Lot`: submitting is blocked when any row has Qty of 0 or less. The error lists every
+  offending row ("Row 2, 5: Qty must be greater than 0") and runs before the lot-capacity check.
+  Applies to rows paid by Time as well. Drafts can still be saved with Qty 0.
+
 ### Changed
 - `EC Lot`: "Duplicate rows" in the item grid is blocked for any selected row that already has
   Received Qty or Pending Qty greater than 0. The error names each offending row (row no - Item -
