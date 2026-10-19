@@ -86,6 +86,14 @@ class ECProcessLot(Document):
 
 	def before_submit(self):
 
+		zero_qty_rows = [str(row.idx) for row in self.lot_items if flt(row.qty) <= 0]
+
+		if zero_qty_rows:
+			frappe.throw(
+				_("Row {0}: Qty must be greater than 0").format(", ".join(zero_qty_rows)),
+				title=_("Invalid Qty"),
+			)
+
 		assigned = {}
 
 		for row in self.lot_items:
