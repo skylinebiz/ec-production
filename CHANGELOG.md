@@ -11,10 +11,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Applies to rows paid by Time as well. Drafts can still be saved with Qty 0.
 
 ### Changed
-- `EC Lot`: "Duplicate rows" in the item grid is blocked for any selected row that already has
-  Received Qty or Pending Qty greater than 0. The error names each offending row (row no - Item -
-  Operation) and the reason; nothing is duplicated if any selected row is blocked. The check is on
-  the form only, so imports and API inserts are not affected.
+- `EC Lot`: "Duplicate rows" in the item grid now clears Pending Qty, Received Qty and Remarks
+  on the new row (Item, Operation, Date and Rate and Qty are kept), so a copy never carries over progress
+  from the original. This applies on the form only; imports and API inserts are not affected.
 
 ## [3.4.0] - 2026-10-14
 
