@@ -3,6 +3,18 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.0] - 2026-10-16
+
+### Added
+- `EC Process Lot`: submitting is blocked when any row has Qty of 0 or less. The error lists every
+  offending row ("Row 2, 5: Qty must be greater than 0") and runs before the lot-capacity check.
+  Applies to rows paid by Time as well. Drafts can still be saved with Qty 0.
+
+### Changed
+- `EC Lot`: "Duplicate rows" in the item grid now clears Pending Qty, Received Qty and Remarks
+  on the new row (Item, Operation, Date and Rate and Qty are kept), so a copy never carries over progress
+  from the original. This applies on the form only; imports and API inserts are not affected.
+
 ## [3.4.0] - 2026-10-14
 
 ### Added

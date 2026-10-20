@@ -61,6 +61,8 @@ frappe.ui.form.on("EC Lot", {
 
         const grid = frm.fields_dict.ec_lot_item.grid;
 
+        reset_on_duplicate(grid);
+
         // add_custom_button prepends; move it after Delete / Duplicate row
         grid.add_custom_button(
             __("Advanced Search"),
@@ -73,6 +75,30 @@ frappe.ui.form.on("EC Lot", {
     }
 
 });
+
+// A duplicated row is a fresh row: it keeps item / operation / date / qty
+// rate but starts with no pending or received qty, or remarks.
+// Wraps the grid's own row copy used by "Duplicate rows".
+function reset_on_duplicate(grid) {
+
+    if (grid._duplicate_reset) {
+        return;
+    }
+    grid._duplicate_reset = true;
+
+    const duplicate_row = grid.duplicate_row.bind(grid);
+
+    grid.duplicate_row = function (d, copy_doc) {
+
+        duplicate_row(d, copy_doc);
+
+        d.pending_qty = 0;
+        d.received_qty = 0;
+        d.remarks = "";
+
+        return d;
+    };
+}
 
 function open_advanced_search(frm) {
 
