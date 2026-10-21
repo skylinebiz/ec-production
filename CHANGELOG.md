@@ -3,6 +3,12 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.6.0] - 2026-10-21
+
+### Changed
+- `Lot Report`: new **Time (in hrs)** column after Qty, with a total. It is shown only for rows paid by
+  Time. Qty and Amount are taken as saved on the Process Lot (no recalculation).
+
 ## [3.5.0] - 2026-10-16
 
 ### Added
