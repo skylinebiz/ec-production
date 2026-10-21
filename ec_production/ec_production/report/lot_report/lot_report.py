@@ -50,6 +50,7 @@ def get_columns():
 			"width": 150,
 		},
 		{"label": _("Qty"), "fieldname": "qty", "fieldtype": "Float", "width": 100},
+		{"label": _("Time (in hrs)"), "fieldname": "time", "fieldtype": "Float", "width": 110},
 		{"label": _("Rate"), "fieldname": "rate", "fieldtype": "Currency", "width": 120},
 		{"label": _("Amount"), "fieldname": "amount", "fieldtype": "Currency", "width": 120},
 		{"label": _("Remarks"), "fieldname": "remarks", "fieldtype": "Data", "width": 200},
@@ -71,6 +72,8 @@ def get_data(filters):
 			pli.item AS item,
 			pli.operation AS operation,
 			pli.qty AS qty,
+			pli.pay_by AS pay_by,
+			pli.time AS time,
 			pli.rate AS rate,
 			pli.amount AS amount,
 			pli.remarks AS remarks
@@ -91,10 +94,15 @@ def get_data(filters):
 	for row in data:
 		row.qty = flt(row.qty)
 
+		# Time is only meaningful (and shown) for rows paid by Time; Qty and
+		# Amount are as saved on the Process Lot
+		row.time = flt(row.time) if row.pay_by == "Time" else None
+
 	if data:
 		data.append({
 			"process_lot": _("Total"),
 			"qty": sum(row.qty for row in data),
+			"time": sum(flt(row.time) for row in data),
 			"rate": sum(flt(row.rate) for row in data),
 			"amount": sum(flt(row.amount) for row in data),
 		})
