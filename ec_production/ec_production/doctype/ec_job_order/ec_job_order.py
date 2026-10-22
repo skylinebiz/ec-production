@@ -94,46 +94,51 @@ class ECJobOrder(Document):
 
 
 @frappe.whitelist()
-def get_lot_item_details(lot, item, operation):
+def get_lot_item_rows(lot, item, operation, fields):
+	"""Every EC Lot Item row for this Item/Operation, first row first. The
+	same Item/Operation can be entered on more than one row of a Lot, so
+	callers combine them instead of reading whichever row comes back."""
 
-	lot_item = frappe.db.get_value(
+	return frappe.get_all(
 		"EC Lot Item",
-		{
+		filters={
 			"parent": lot,
+			"parenttype": "EC Lot",
 			"item": item,
 			"operation": operation
 		},
-		["qty", "rate"],
-		as_dict=True
+		fields=fields,
+		order_by="idx asc",
+		limit_page_length=0
 	)
 
-	if not lot_item:
+
+def get_lot_item_details(lot, item, operation):
+	"""Combined Qty of the matching rows, and the first row's rate."""
+
+	rows = get_lot_item_rows(lot, item, operation, ["name", "qty", "rate"])
+
+	if not rows:
 		return 0, 0
 
-	return flt(lot_item.qty), flt(lot_item.rate)
+	return sum(flt(row.qty) for row in rows), flt(rows[0].rate)
 
 
 @frappe.whitelist()
 def get_available_qty(lot, item, operation):
 	"""Lot Qty minus what's already Pending and Received for this
-	Item/Operation (per the Lot's own rollup fields). Used both by
-	the JO submit-time check and for live client-side feedback."""
+	Item/Operation (per the Lot's own rollup fields), across every row of
+	the Lot that carries that Item/Operation. Used both by the JO
+	submit-time check and for live client-side feedback."""
 
-	lot_item = frappe.db.get_value(
-		"EC Lot Item",
-		{
-			"parent": lot,
-			"item": item,
-			"operation": operation
-		},
-		["qty", "pending_qty", "received_qty"],
-		as_dict=True
+	rows = get_lot_item_rows(
+		lot, item, operation, ["qty", "pending_qty", "received_qty"]
 	)
 
-	if not lot_item:
-		return 0
-
-	return flt(lot_item.qty) - flt(lot_item.pending_qty) - flt(lot_item.received_qty)
+	return sum(
+		flt(row.qty) - flt(row.pending_qty) - flt(row.received_qty)
+		for row in rows
+	)
 
 
 def sync_lot_item_rollups(lot, item, operation):
@@ -174,11 +179,32 @@ def sync_lot_item_rollups(lot, item, operation):
 
 	received_qty = jr_received_qty + pl_received_qty
 
-	frappe.db.set_value(
-		"EC Lot Item",
-		{"parent": lot, "item": item, "operation": operation},
-		{"pending_qty": pending_qty, "received_qty": received_qty}
-	)
+	# The totals are per Item/Operation. When the Lot has several rows for
+	# it they are spread over those rows first-in-first-out: Received fills
+	# the first row up to its Qty, then the next, and Pending takes what is
+	# left in the same order, so no row ever shows more than its own Qty.
+	rows = get_lot_item_rows(lot, item, operation, ["name", "qty"])
+
+	received_left = received_qty
+	pending_left = pending_qty
+	allocation = []
+
+	for row in rows:
+		received = min(received_left, max(flt(row.qty), 0))
+		received_left -= received
+		allocation.append([row, received, 0])
+
+	for entry in allocation:
+		pending = min(pending_left, max(flt(entry[0].qty) - entry[1], 0))
+		pending_left -= pending
+		entry[2] = pending
+
+	for row, received, pending in allocation:
+		frappe.db.set_value(
+			"EC Lot Item",
+			row.name,
+			{"pending_qty": pending, "received_qty": received}
+		)
 
 
 @frappe.whitelist()
