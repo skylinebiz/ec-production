@@ -7,6 +7,10 @@ from frappe.utils import cint, flt
 from frappe.utils.nestedset import get_descendants_of
 from frappe import _
 
+from ec_production.ec_production.doctype.ec_job_order.ec_job_order import (
+	sync_lot_item_rollups,
+)
+
 
 # Child rows that point at an EC Lot Item by (lot, item, operation):
 # (child doctype, its lot field, parent doctype)
@@ -24,6 +28,25 @@ class ECLot(Document):
 		self.validate_used_rows()
 		self.validate_used_qty()
 		self.calculate_totals()
+
+	def on_update(self):
+		self.resync_shared_rollups()
+
+	def resync_shared_rollups(self):
+		"""
+		Received / Pending Qty are spread first-in-first-out over the rows
+		that share an Item and Operation, so adding, removing or resizing
+		one of those rows moves the spread: recompute it.
+		"""
+
+		counts = {}
+		for row in self.ec_lot_item:
+			key = (row.item, row.operation)
+			counts[key] = counts.get(key, 0) + 1
+
+		for (item, operation), count in counts.items():
+			if count > 1 and item and operation:
+				sync_lot_item_rollups(self.name, item, operation)
 
 	def set_rates(self):
 		for row in self.ec_lot_item:
@@ -73,28 +96,38 @@ class ECLot(Document):
 	def validate_used_qty(self):
 		"""
 		If this lot has already been used in any Process Lot
-		(draft/submitted/cancelled), do not allow reducing qty
-		below the quantity already consumed.
+		(draft/submitted; cancelled ones don't count), do not allow
+		reducing qty below the quantity already consumed.
 		"""
 
 		if self.is_new():
 			return
 
+		# The same Item / Operation can be in several rows; usage is per
+		# Item / Operation, so compare it with their combined qty
+		lot_qty = {}
 		for row in self.ec_lot_item:
+			key = (row.item, row.operation)
+			lot_qty[key] = lot_qty.get(key, 0) + flt(row.qty)
+
+		for (item, operation), qty in lot_qty.items():
 
 			used_qty = frappe.db.sql("""
-				SELECT COALESCE(SUM(qty), 0)
-				FROM `tabEC Process Lot Item`
-				WHERE ec_lot = %s
-				  AND item = %s
-				  AND operation = %s
+				SELECT COALESCE(SUM(pli.qty), 0)
+				FROM `tabEC Process Lot Item` pli
+				INNER JOIN `tabEC Process Lot` pl
+					ON pl.name = pli.parent
+				WHERE pli.ec_lot = %s
+				  AND pli.item = %s
+				  AND pli.operation = %s
+				  AND pl.docstatus < 2
 			""", (
 				self.name,
-				row.item,
-				row.operation
+				item,
+				operation
 			))[0][0] or 0
 
-			if flt(row.qty) < flt(used_qty):
+			if qty < flt(used_qty):
 				frappe.throw(
 					_(
 						"Cannot reduce Qty for Item <b>{item}</b> ({operation}).<br><br>"
@@ -102,9 +135,9 @@ class ECLot(Document):
 						"Qty already used in Process Lots: <b>{used_qty}</b><br><br>"
 						"Qty must be at least <b>{used_qty}</b>."
 					).format(
-						item=row.item,
-						operation=row.operation,
-						lot_qty=row.qty,
+						item=item,
+						operation=operation,
+						lot_qty=qty,
 						used_qty=used_qty
 					)
 				)
