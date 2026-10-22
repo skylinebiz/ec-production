@@ -3,6 +3,7 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+
 ## [3.7.0] - 2026-10-22
 
 ### Fixed
@@ -19,6 +20,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Pending takes what is left in the same order), so a row never shows more Received Qty than its own Qty. The
   spread is recomputed when a Process Lot, Job Order or Job Receipt is submitted or cancelled, and when the EC
   Lot's rows are added, removed or resized. Lots with a single row per Item and Operation are unaffected.
+
+## [3.6.0] - 2026-10-21
+
+### Changed
+- `Lot Report`: new **Time (in hrs)** column after Qty, with a total. It is shown only for rows paid by
+  Time. Qty and Amount are taken as saved on the Process Lot (no recalculation).
 
 ## [3.5.0] - 2026-10-16
 
