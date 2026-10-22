@@ -3,6 +3,23 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.7.0] - 2026-10-22
+
+### Fixed
+- `EC Lot`: the "Cannot reduce Qty" check no longer counts cancelled Process Lots as used qty, so a
+  cancelled entry no longer blocks lowering the lot's Qty.
+- `EC Lot`: when the same Item and Operation are in more than one row, a row can now be deleted while
+  another row still holds that Item and Operation (it was refused as "already used"). A row with its own Pending
+  or Received Qty is still protected. The "Cannot reduce Qty" check now compares the used qty with the combined
+  Qty of those rows rather than each row on its own.
+- `EC Process Lot` / `EC Job Order` / `EC Job Receipt`: with the same Item and Operation in more than one
+  `EC Lot` row, Available Qty (Lot Qty − Pending − Received) now adds up all those rows. It only looked at the
+  first row, so a second row (e.g. Qty 10) was ignored and the error said Available 0. Received and Pending Qty
+  are now spread over those rows first-in-first-out (Received fills row 1 up to its Qty, then row 2, and so on;
+  Pending takes what is left in the same order), so a row never shows more Received Qty than its own Qty. The
+  spread is recomputed when a Process Lot, Job Order or Job Receipt is submitted or cancelled, and when the EC
+  Lot's rows are added, removed or resized. Lots with a single row per Item and Operation are unaffected.
+
 ## [3.5.0] - 2026-10-16
 
 ### Added

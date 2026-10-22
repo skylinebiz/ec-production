@@ -23,6 +23,30 @@ frappe.ui.form.on("EC Lot Item", {
             return;
         }
 
+        // The same Item / Operation can sit in more than one row. Usage is
+        // tracked per Item / Operation, so while another row still holds
+        // it, this one is free to go — unless it has progress of its own.
+        const has_sibling = (frm.doc.ec_lot_item || []).some(
+            other => other.name !== row.name
+                && other.item === row.item
+                && other.operation === row.operation
+        );
+
+        if (has_sibling) {
+
+            if (flt(row.received_qty) > 0 || flt(row.pending_qty) > 0) {
+                frappe.throw(
+                    __("Row {0}: {1} ({2}) already has Pending or Received Qty and cannot be deleted.", [
+                        row.idx,
+                        row.item,
+                        row.operation
+                    ])
+                );
+            }
+
+            return;
+        }
+
         return frappe.call({
             method: "ec_production.ec_production.doctype.ec_lot.ec_lot.get_lot_item_usage",
             args: {
