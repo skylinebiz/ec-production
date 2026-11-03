@@ -3,6 +3,18 @@
 All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.8.0] - 2026-11-03
+
+### Added
+- **App icon** — EC Production now has its own icon on the Apps screen (an "EC P" tile,
+  `ec-production-logo.svg`), set through `app_logo_url` / `add_to_apps_screen` in `hooks.py`.
+
+### Changed
+- **Sidebar** — the header icon is now `building` (was `hammer`). EC Item Operation Rate, EC Lot,
+  EC Process Lot, EC Job Order and EC Job Receipt are grouped under a new **Masters** section, the
+  **Reports** section is no longer indented, and the **Production Processor** page link was removed
+  from the sidebar.
+
 ## [3.7.0] - 2026-10-22
 
 ### Fixed
