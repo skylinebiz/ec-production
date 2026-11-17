@@ -6,10 +6,12 @@ app_email = "support@skylinebiz.in"
 app_license = "mit"
 
 app_home = "/desk/ec-production/ec-item-operation-rate"
+app_logo_url = "/assets/ec_production/images/ec-production-logo.svg"
 
 add_to_apps_screen = [
     {
         "name": app_name,
+        "logo": app_logo_url,
         "title": app_title,
         "route": app_home,
     }
