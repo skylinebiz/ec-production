@@ -4,6 +4,25 @@ All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
+## [3.9.0] - 2026-11-19
+
+### Changed
+- **App icon** — replaced the grey "EC P" text tile with a drawn icon: three stacked lots and an
+  arrow on an indigo rounded square (`ec-production-logo.svg`). It has no text, so it stays readable
+  at sidebar size.
+- **Sidebar** — **Masters** now holds Employee, Item and Operation. EC Item Operation Rate, EC Lot,
+  EC Process Lot, EC Job Order and EC Job Receipt moved to a new **Transaction** section.
+
+### Removed
+- The old `workspace_sidebar/` sidebars **EC Prod** and **EC Production**. This Frappe version no
+  longer imports that folder; the app's sidebar is the module `Sidebar` under
+  `ec_production/ec_production/sidebar/`.
+- New patch `remove_legacy_workspace_sidebars` (pre model sync) deletes the two old `Workspace
+  Sidebar` records from the database, so Frappe's sidebar upgrade does not rebuild them.
+
+### Upgrade notes
+- Run `bench --site <site> migrate`, then hard-refresh browsers to see the new icon.
+
 ## [3.8.0] - 2026-11-03
 
 ### Added
