@@ -35,17 +35,33 @@ class ECLot(Document):
 	def resync_shared_rollups(self):
 		"""
 		Received / Pending Qty are spread first-in-first-out over the rows
-		that share an Item and Operation, so adding, removing or resizing
-		one of those rows moves the spread: recompute it.
+		that share an Item and Operation, and each row's share is capped at
+		its own Qty. Adding, removing, reordering or resizing any of those
+		rows moves the spread — including going from two rows back to one,
+		which leaves the last row holding only its old share — so
+		recompute every Item / Operation whose rows changed.
 		"""
 
-		counts = {}
-		for row in self.ec_lot_item:
-			key = (row.item, row.operation)
-			counts[key] = counts.get(key, 0) + 1
+		def rows_by_key(doc):
+			grouped = {}
+			for row in doc.ec_lot_item if doc else []:
+				if row.item and row.operation:
+					grouped.setdefault((row.item, row.operation), []).append(
+						(row.name, flt(row.qty))
+					)
+			return grouped
 
-		for (item, operation), count in counts.items():
-			if count > 1 and item and operation:
+		before = self.get_doc_before_save()
+
+		# A brand-new Lot isn't referenced by anything yet: nothing to spread
+		if not before:
+			return
+
+		current = rows_by_key(self)
+		previous = rows_by_key(before)
+
+		for item, operation in current:
+			if current[(item, operation)] != previous.get((item, operation)):
 				sync_lot_item_rollups(self.name, item, operation)
 
 	def set_rates(self):

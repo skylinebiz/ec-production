@@ -78,10 +78,22 @@ def load_production_plan(production_plan):
 
 @frappe.whitelist()
 def load_job_cards(production_plan, operation=None):
+    """
+    Job Cards (not cancelled) of the Production Plan's Work Orders, in the
+    order of each Work Order's operations, with what the page needs to
+    show their timer and remaining qty.
+    """
+
     if not production_plan:
         frappe.throw(_("Production Plan is required"))
 
-    conditions = ["wo.production_plan = %(production_plan)s"]
+    frappe.has_permission("Production Plan", "read", production_plan, throw=True)
+    frappe.has_permission("Job Card", "read", throw=True)
+
+    conditions = [
+        "wo.production_plan = %(production_plan)s",
+        "jc.docstatus < 2",
+    ]
     values = {"production_plan": production_plan}
 
     if operation:
@@ -93,51 +105,87 @@ def load_job_cards(production_plan, operation=None):
         SELECT
             jc.name AS job_card,
             jc.work_order,
-            wo.production_item AS item_name,
+            wo.production_item AS item_code,
+            wo.item_name,
+            wo.qty AS wo_qty,
+            wo.produced_qty AS wo_produced_qty,
+            wo.status AS wo_status,
             jc.operation,
+            jc.workstation,
             jc.status,
+            jc.docstatus,
+            jc.is_paused,
             jc.for_quantity,
             jc.total_completed_qty,
+            jc.process_loss_qty,
             jc.pending_qty,
+            COALESCE(woo.idx, 0) AS operation_seq,
 
-            EXISTS (
-                SELECT 1
+            (
+                SELECT MIN(jctl.from_time)
                 FROM `tabJob Card Time Log` jctl
                 WHERE jctl.parent = jc.name
+                  AND jctl.parenttype = 'Job Card'
+                  AND jctl.from_time IS NOT NULL
                   AND jctl.to_time IS NULL
-            ) AS is_timer_running,
+            ) AS timer_started_at,
 
             (
                 SELECT jctl.employee
                 FROM `tabJob Card Time Log` jctl
                 WHERE jctl.parent = jc.name
+                  AND jctl.parenttype = 'Job Card'
                 ORDER BY jctl.idx DESC
                 LIMIT 1
-            ) AS employee,
-
-            (
-                SELECT emp.employee_name
-                FROM `tabJob Card Time Log` jctl
-                INNER JOIN `tabEmployee` emp
-                    ON emp.name = jctl.employee
-                WHERE jctl.parent = jc.name
-                ORDER BY jctl.idx DESC
-                LIMIT 1
-            ) AS employee_name
+            ) AS employee
 
         FROM `tabJob Card` jc
         INNER JOIN `tabWork Order` wo
             ON wo.name = jc.work_order
+        LEFT JOIN `tabWork Order Operation` woo
+            ON woo.name = jc.operation_id
 
         WHERE {" AND ".join(conditions)}
 
-        ORDER BY wo.name, jc.idx
+        ORDER BY
+            wo.creation ASC,
+            wo.name ASC,
+            COALESCE(woo.idx, 9999) ASC,
+            jc.creation ASC
         """,
         values,
         as_dict=True,
     )
 
+    employee_names = {}
+    employees = list({row.employee for row in job_cards if row.employee})
+    if employees:
+        employee_names = dict(
+            frappe.get_all(
+                "Employee",
+                filters={"name": ["in", employees]},
+                fields=["name", "employee_name"],
+                as_list=True,
+            )
+        )
+
+    for row in job_cards:
+        row.is_timer_running = 1 if row.timer_started_at else 0
+        row.employee_name = employee_names.get(row.employee)
+        row.remaining_qty = get_remaining_qty(row)
+
     return job_cards
+
+
+def get_remaining_qty(jc):
+    """Qty of this Job Card not yet completed (or lost)."""
+
+    return max(
+        flt(jc.for_quantity)
+        - flt(jc.total_completed_qty)
+        - flt(jc.process_loss_qty),
+        0,
+    )
 
 
 @frappe.whitelist()
@@ -256,29 +304,104 @@ def process_job_timer(job_card, employee, qty):
     )
 
 
+def get_running_logs(jc):
+    return [
+        log for log in jc.time_logs
+        if log.from_time and not log.to_time
+    ]
+
+
+def validate_job_card_editable(jc):
+    if jc.docstatus == 2:
+        frappe.throw(_("Job Card {0} is Cancelled.").format(frappe.bold(jc.name)))
+
+    if jc.docstatus == 1:
+        frappe.throw(_("Job Card {0} is already Completed.").format(frappe.bold(jc.name)))
+
+
 @frappe.whitelist()
 def start_job_timer(job_card, employee):
-    jc = frappe.get_doc("Job Card", job_card)
+    """Start (or, when On Hold, resume) the Job Card's timer for an Employee."""
 
-    if jc.docstatus == 2:
-        frappe.throw(_("Job Card is Cancelled."))
+    if not employee:
+        frappe.throw(_("Please select an Employee."))
 
-    if jc.status == "Completed":
-        frappe.throw(_("Job Card is already Completed."))
+    jc = frappe.get_doc("Job Card", job_card, for_update=True)
+
+    validate_job_card_editable(jc)
+
+    if get_running_logs(jc):
+        frappe.throw(
+            _("Job Card {0} is already running. Reload the page to see its latest status.")
+            .format(frappe.bold(jc.name)),
+            title=_("Already Started"),
+        )
+
+    if not get_remaining_qty(jc):
+        frappe.throw(
+            _("Nothing is left to process on Job Card {0}.").format(frappe.bold(jc.name))
+        )
+
+    # A paused card is resumed with whoever is chosen now, not
+    # necessarily the employees it was paused with
+    if jc.is_paused:
+        jc.is_paused = 0
+        jc.db_set("is_paused", 0)
 
     jc.start_timer(
         start_time=now_datetime(),
-        employees=[
-            {
-                "employee": employee
-            }
-        ]
+        employees=[{"employee": employee}],
     )
 
     return {
         "message": _("Timer Started"),
         "job_card": jc.name,
     }
+
+
+@frappe.whitelist()
+def hold_job_timer(job_card):
+    """Put a running Job Card On Hold: its timer stops, nothing is completed."""
+
+    jc = frappe.get_doc("Job Card", job_card, for_update=True)
+
+    validate_job_card_editable(jc)
+
+    if not get_running_logs(jc):
+        frappe.throw(
+            _("Job Card {0} has no running timer. Reload the page to see its latest status.")
+            .format(frappe.bold(jc.name)),
+            title=_("Not Started"),
+        )
+
+    jc.pause_job(end_time=now_datetime())
+
+    return {
+        "message": _("Job Card On Hold"),
+        "job_card": jc.name,
+    }
+
+
+def reopen_held_job_card(jc):
+    """
+    Stopping a Job Card that is On Hold: ERPNext only records completed qty
+    on an open time log and won't submit a card On Hold, so take it off
+    hold with a log for its last employee that the completion closes
+    straight away (no time is added).
+    """
+
+    employee = next(
+        (log.employee for log in reversed(jc.time_logs) if log.employee),
+        None,
+    )
+
+    jc.is_paused = 0
+    jc.db_set("is_paused", 0)
+
+    jc.start_timer(
+        start_time=now_datetime(),
+        employees=[{"employee": employee}],
+    )
 
 
 @frappe.whitelist()
@@ -289,65 +412,64 @@ def stop_job_timer(
     pending_qty=None,
     sub_operation=None,
 ):
+    """
+    Stop the running timer and record `qty` as completed:
+
+    - `qty` covers everything left on the card: it is completed and submitted.
+    - `qty` is less: the card is reduced to what was done and completed, and
+      a new Job Card is created for the rest of the qty.
+
+    When this completes the Work Order's last operation, its Manufacture
+    Stock Entry is created. That is done in a savepoint, so a stock
+    problem never stops the Job Card from being completed: the operator
+    is told, and the entry can be made from the Work Order.
+    """
+
     qty = flt(qty)
     process_loss_qty = flt(process_loss_qty)
 
-    jc = frappe.get_doc("Job Card", job_card)
+    jc = frappe.get_doc("Job Card", job_card, for_update=True)
 
-    if jc.docstatus == 2:
-        frappe.throw(_("Job Card is Cancelled."))
+    validate_job_card_editable(jc)
 
-    if qty >= flt(jc.for_quantity):
-        return stop_time_and_submit(
-            jc,
-            qty,
-            process_loss_qty,
-            pending_qty,
-            sub_operation,
+    running = bool(get_running_logs(jc))
+
+    if not running and not jc.is_paused:
+        frappe.throw(
+            _("Job Card {0} has no running timer. Reload the page to see its latest status.")
+            .format(frappe.bold(jc.name)),
+            title=_("Not Started"),
         )
 
-    return stop_and_split_job_card(
-        jc,
-        qty,
-        process_loss_qty,
-        sub_operation,
-    )
+    precision = jc.precision("total_completed_qty")
+    remaining_qty = flt(get_remaining_qty(jc), precision)
 
-# Case 1 : for qty = recd qty
-def stop_time_and_submit(
-    jc,
-    qty,
-    process_loss_qty=0,
-    pending_qty=None,
-    sub_operation=None,
-):
-    if pending_qty is None:
-        pending_qty = max(0, flt(jc.pending_qty) - qty)
+    if qty <= 0:
+        frappe.throw(_("Received Qty must be greater than zero."))
 
-    complete_job_card(
-        jc,
-        qty=qty,
-        pending_qty=pending_qty,
-        process_loss_qty=process_loss_qty,
-        sub_operation=sub_operation,
-    )
+    if process_loss_qty < 0:
+        frappe.throw(_("Process Loss Qty cannot be negative."))
 
-    return {
-        "completed_job_card": jc.name,
-    }
+    if flt(qty + process_loss_qty, precision) > remaining_qty:
+        frappe.throw(
+            _("Received Qty {0} cannot be more than the {1} left on Job Card {2}.").format(
+                frappe.bold(flt(qty + process_loss_qty, precision)),
+                frappe.bold(remaining_qty),
+                frappe.bold(jc.name),
+            ),
+            title=_("Qty Exceeds Job Card"),
+        )
 
+    left_over = flt(remaining_qty - qty - process_loss_qty, precision)
 
-# Case 2 for qty > recd qty
-def stop_and_split_job_card(
-    jc,
-    qty,
-    process_loss_qty=0,
-    sub_operation=None,
-):
-    original_qty = flt(jc.for_quantity)
-    remaining_qty = original_qty - qty
+    result = {"completed_job_card": jc.name}
 
-    scale_job_card_quantity(jc, qty)
+    if not running:
+        reopen_held_job_card(jc)
+
+    if left_over > 0:
+        new_jc = split_job_card(jc, left_over)
+        result["new_job_card"] = new_jc.name
 
     complete_job_card(
         jc,
@@ -357,17 +479,11 @@ def stop_and_split_job_card(
         sub_operation=sub_operation,
     )
 
-    new_jc = duplicate_job_card(jc, remaining_qty)
+    result.update(make_manufacture_entry_safely(jc))
 
-    return {
-        "completed_job_card": jc.name,
-        "new_job_card": new_jc.name,
-    }
+    return result
 
 
-# Helpers
-
-# Completing job for recd qty 
 def complete_job_card(
     jc,
     qty,
@@ -387,40 +503,48 @@ def complete_job_card(
 
     jc.reload()
 
-    create_stock_entry_if_all_operations_complete(jc)
-
     return jc
 
 
-def scale_job_card_quantity(jc, new_qty):
+def split_job_card(jc, left_over):
+    """
+    Move `left_over` qty of a running card to a new draft Job Card. The
+    running card keeps what has been processed so far plus this cycle's
+    qty; material already transferred to it is shared out in the same
+    ratio, so neither card asks for its material again.
+    """
+
     original_qty = flt(jc.for_quantity)
+    kept_qty = original_qty - left_over
 
-    if original_qty:
-        jc.time_required = (
-            flt(jc.time_required) / original_qty
-        ) * new_qty
+    if original_qty <= 0 or kept_qty <= 0:
+        frappe.throw(_("Cannot split Job Card {0}.").format(frappe.bold(jc.name)))
 
-    jc.for_quantity = new_qty
-    jc.pending_qty = 0
-
-    jc.save(ignore_permissions=True)
-
-
-# Creating job card with remaining qty
-def duplicate_job_card(jc, qty):
-    source_qty = flt(jc.for_quantity)
+    kept_ratio = kept_qty / original_qty
+    moved_ratio = left_over / original_qty
 
     new_jc = frappe.copy_doc(jc)
-
     reset_job_card(new_jc)
 
-    new_jc.for_quantity = qty
-    new_jc.pending_qty = qty
+    new_jc.for_quantity = left_over
+    new_jc.time_required = flt(jc.time_required) * moved_ratio
+    new_jc.transferred_qty = flt(jc.transferred_qty) * moved_ratio
 
-    if source_qty:
-        new_jc.time_required = (
-            flt(jc.time_required) / source_qty
-        ) * qty
+    for row in new_jc.items:
+        row.required_qty = flt(row.required_qty) * moved_ratio
+        row.transferred_qty = flt(row.transferred_qty) * moved_ratio
+        row.consumed_qty = 0
+
+    jc.for_quantity = kept_qty
+    jc.pending_qty = 0
+    jc.time_required = flt(jc.time_required) * kept_ratio
+    jc.transferred_qty = flt(jc.transferred_qty) * kept_ratio
+
+    for row in jc.items:
+        row.required_qty = flt(row.required_qty) * kept_ratio
+        row.transferred_qty = flt(row.transferred_qty) * kept_ratio
+
+    jc.save(ignore_permissions=True)
 
     new_jc.insert(ignore_permissions=True)
 
@@ -432,11 +556,12 @@ def reset_job_card(jc):
     jc.amended_from = None
     jc.docstatus = 0
     jc.status = "Open"
+    jc.is_paused = 0
 
     jc.total_completed_qty = 0
     jc.process_loss_qty = 0
+    jc.pending_qty = 0
     jc.manufactured_qty = 0
-    jc.transferred_qty = 0
     jc.total_time_in_mins = 0
 
     jc.actual_start_date = None
@@ -444,6 +569,46 @@ def reset_job_card(jc):
 
     jc.time_logs = []
     jc.scheduled_time_logs = []
+    jc.employee = []
+
+    for row in jc.get("sub_operations") or []:
+        row.status = "Pending"
+        row.completed_qty = 0
+        row.process_loss_qty = 0
+        row.completed_time = None
+
+
+def make_manufacture_entry_safely(jc):
+    """
+    Run create_stock_entry_if_all_operations_complete in a savepoint. On
+    failure only the Stock Entry is rolled back; the Job Card completion
+    stays, and the reason is returned for the page to show.
+    """
+
+    savepoint = "ec_manufacture_entry"
+    frappe.db.savepoint(savepoint)
+
+    try:
+        stock_entry = create_stock_entry_if_all_operations_complete(jc)
+    except Exception as e:
+        frappe.db.rollback(save_point=savepoint)
+        frappe.clear_last_message()
+        frappe.log_error(
+            title=_("Production Processor: Manufacture entry failed for {0}").format(jc.work_order),
+            reference_doctype="Work Order",
+            reference_name=jc.work_order,
+        )
+
+        return {
+            "stock_entry_error": _(
+                "Job Card completed, but the Manufacture Stock Entry for Work Order {0} "
+                "could not be created: {1}"
+            ).format(frappe.bold(jc.work_order), frappe.utils.strip_html(str(e)))
+        }
+
+    frappe.db.release_savepoint(savepoint)
+
+    return {"stock_entry": stock_entry.name} if stock_entry else {}
 
 
 def create_stock_entry_if_last_operation(job_card):
@@ -515,7 +680,9 @@ def create_stock_entry_if_all_operations_complete(job_card):
     if not job_card.work_order:
         return
 
-    work_order = frappe.get_doc("Work Order", job_card.work_order)
+    # Locked, so two Job Cards finishing at the same time can't both
+    # pass the duplicate check below
+    work_order = frappe.get_doc("Work Order", job_card.work_order, for_update=True)
 
     if work_order.docstatus != 1:
         return

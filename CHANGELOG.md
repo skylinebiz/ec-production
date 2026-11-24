@@ -4,6 +4,69 @@ All notable changes to `ec_production` are documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
+## [4.0.0] - 2026-11-24
+
+### Fixed
+- **Duplicating or amending an EC Job Order copied Qty Received.** The copy showed its rows as
+  already received although no Job Receipt points at them, so Process Receipt found nothing pending
+  and the EC Lot's Pending Qty was too low. A new Job Order now always starts at Qty Received 0
+  (reset on insert, and `qty_received` on EC Job Order Detail is now No Copy).
+- **A draft EC Job Receipt could get stuck after its Job Order was cancelled.** Cancelling a Job
+  Order is only blocked by submitted receipts, and the draft kept its JOD Id / Job Order (read-only
+  on the form), so it failed with "Cannot link cancelled document" forever. When a draft is saved or
+  submitted, links to a Job Order that is no longer submitted are dropped and the row is matched
+  again against the submitted Job Orders, e.g. the amendment.
+- **Editing a saved EC Job Receipt row credited the wrong Job Order.** Changing the Employee /
+  Operation / Item / Lot of a row kept its old JOD Id, so the rate and Qty Received went to the Job
+  Order line it was first matched to. The form now clears the link when those fields change, and
+  the server re-matches any row whose JOD Id no longer fits it.
+- **EC Lot Received / Pending Qty went stale.** They were only recomputed for Item / Operation pairs
+  on more than one row, so removing a duplicate row (or resizing a single one) left the remaining row
+  with its old share, overstating Available Qty. Every Item / Operation whose rows changed is now
+  recomputed on save.
+- **Production Plan "Process Cutting" could not create a Stock Entry.** The dialog sent every cutting
+  item at once (the server takes one), always used Qty 1, and could not open the returned entry. Each
+  cutting item now has its own Qty (defaulting to what the plan needs, exploded through the BOMs) and
+  its own button, which opens a new Manufacture Stock Entry. "Used By" no longer drops plan items that
+  share a sub-BOM.
+- **RM Issue / Process Cuts / RM Receive were slow on large sites.** `get_rm_issue_items` loaded every
+  Cutting Job Card in the system; it now reads only the plan's Job Cards in one query, caches BOMs,
+  and checks read permission on the Production Plan.
+- **Production Processor: Job Cards were not in operation order.** They are now listed per Work Order
+  in the order of its operations (split Job Cards stay with their operation); cancelled ones are hidden.
+- **Production Processor: Start crashed** for Job Cards not in status Open (e.g. Material
+  Transferred) as they had no Employee field. Every Job Card that can be started now has one, an On
+  Hold card offers Resume, and a card that is already running can't be started twice.
+- **Production Processor: Stop could inflate a Job Card or get stuck.** Received Qty above what is
+  left on the card is refused; a smaller qty completes the card and moves the rest (with its share of
+  transferred material) to a new Job Card after a confirmation. When the last operation finishes, a
+  failure creating the Manufacture Stock Entry no longer rolls back the Job Card: it stays completed
+  and the reason is shown. The Work Order is locked while that entry is created.
+
+- **RM Processing qty went up by 0.001 per scroll.** The Process Cuts and RM Receive qty fields (and
+  Recd Qty on the Job Cards table) now step by 1.
+
+### Added
+- **Production Processor: Hold.** A running Job Card offers Hold | Stop; On Hold it offers Resume |
+  Stop. Stopping a card that is On Hold completes it straight away with the qty entered.
+- **RM Processing: Qty can't exceed Job Qty.** Create Stock Entry in Process Cuts and RM Receive is
+  refused when the qty entered is greater than the row's Job Qty.
+
+### Changed
+- **Production Processor redesigned** with Frappe's own styles (the page used Bootstrap 5 classes that
+  desk does not ship, and now also works in dark mode): Production Plan, Operation and a Load button
+  at the top; a Production Summary with a card per Work Order showing progress and its operations;
+  Employee (apply to all) above the Job Cards; Job Cards grouped by Work Order with numbered steps,
+  links, a live timer on running cards and the qty left. RM Processing is in the page header.
+- **RM Processing dialog restyled** (content, buttons and options unchanged): wider, lighter tables
+  with a sticky header, codes kept on one line, the full BOM visible and components set apart.
+
+### Upgrade notes
+- Run `bench --site <site> migrate` so the form also stops copying Qty Received when duplicating.
+  The server-side reset works without it.
+- Restart the bench (or `bench restart`) to load the Production Processor's new server code (Hold,
+  operation order, Start / Stop fixes).
+
 ## [3.9.0] - 2026-11-19
 
 ### Changed

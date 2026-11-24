@@ -1,39 +1,220 @@
 frappe.pages['production-processor'].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: 'Production Processor',
+		title: __('Production Processor'),
 		single_column: true
 	});
 
-	new ProductionProcessor(page);
+	wrapper.production_processor = new ProductionProcessor(page);
 };
+
+frappe.pages['production-processor'].on_page_show = function (wrapper) {
+	const processor = wrapper.production_processor;
+	const plan = frappe.route_options && frappe.route_options.production_plan;
+
+	if (processor && plan) {
+		frappe.route_options = null;
+		processor.production_plan.set_value(plan).then(() => processor.load_data());
+	}
+};
+
+const PP_STYLE = `
+	.production-processor {
+		padding: var(--padding-md) 15px var(--padding-xl);
+	}
+	.production-processor .pp-card {
+		background: var(--card-bg);
+		border: 1px solid var(--border-color);
+		border-radius: var(--border-radius-md);
+		box-shadow: var(--card-shadow);
+		margin-bottom: var(--margin-lg);
+	}
+	.production-processor .pp-filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--padding-md) var(--padding-lg);
+		align-items: flex-end;
+		padding: var(--padding-md) var(--padding-lg);
+	}
+	.production-processor .pp-filters > .pp-filter { flex: 1 1 220px; min-width: 200px; }
+	.production-processor .pp-filters .form-group { margin-bottom: 0; }
+	.production-processor .pp-filters .pp-filter-actions { display: flex; gap: var(--padding-sm); flex: 0 0 auto; }
+	.production-processor .pp-filters .pp-load-btn { min-width: 120px; height: 28px; }
+	.production-processor .pp-section { margin-bottom: var(--margin-lg); }
+	.production-processor .pp-section-title {
+		font-size: var(--text-base); font-weight: 600; color: var(--heading-color);
+		margin: 0 0 var(--padding-sm) 2px;
+	}
+	.production-processor .pp-employee-section { align-items: center; }
+	.production-processor .pp-employee-section .pp-filter { flex: 0 1 360px; }
+	.production-processor .pp-tip {
+		flex: 1 1 300px;
+		padding: var(--padding-sm) var(--padding-md);
+		border-radius: var(--border-radius);
+		background: var(--bg-blue);
+		color: var(--text-on-blue);
+		font-size: var(--text-sm);
+	}
+
+	.production-processor .pp-summary {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+		gap: var(--padding-md);
+	}
+	.production-processor .pp-wo-card { padding: var(--padding-md) var(--padding-lg); margin-bottom: 0; }
+	.production-processor .pp-wo-head { display: flex; justify-content: space-between; gap: var(--padding-sm); }
+	.production-processor .pp-wo-item { font-weight: 600; color: var(--heading-color); }
+	.production-processor .pp-wo-head > div { min-width: 0; }
+	.production-processor .pp-wo-head .pp-wo-item,
+	.production-processor .pp-wo-head a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.production-processor .pp-wo-head > .text-right { flex: 0 0 auto; }
+	.production-processor .pp-muted { color: var(--text-muted); font-size: var(--text-sm); }
+	.production-processor .pp-stats { display: flex; gap: var(--padding-xl); margin: var(--padding-md) 0 var(--padding-sm); }
+	.production-processor .pp-stats .pp-muted { margin-bottom: 2px; }
+	.production-processor .pp-stat-value { font-size: var(--text-xl); font-weight: 600; color: var(--heading-color); }
+	.production-processor .pp-progress { height: 6px; margin: 0 0 var(--padding-md); }
+	.production-processor .pp-steps { display: flex; flex-wrap: wrap; gap: var(--padding-xs) 6px; }
+	.production-processor .pp-step {
+		display: inline-flex; align-items: center; gap: 4px;
+		padding: 3px 10px; border-radius: 999px; font-size: var(--text-xs); white-space: nowrap;
+		background: var(--bg-gray); color: var(--text-on-gray); border: 1px solid var(--border-color);
+	}
+	.production-processor .pp-step.done { background: var(--bg-green); color: var(--text-on-green); border-color: transparent; }
+	.production-processor .pp-step.active { background: var(--bg-blue); color: var(--text-on-blue); border-color: transparent; }
+	.production-processor .pp-step.partial { background: var(--bg-orange); color: var(--text-on-orange); border-color: transparent; }
+
+	.production-processor .pp-table-head {
+		display: flex; justify-content: space-between; align-items: center;
+		padding: var(--padding-md) var(--padding-lg);
+		border-bottom: 1px solid var(--border-color);
+	}
+	.production-processor .pp-table-title { font-weight: 600; color: var(--heading-color); }
+	.production-processor table.pp-table { width: 100%; margin: 0; }
+	.production-processor table.pp-table th {
+		font-size: var(--text-sm); font-weight: 500; color: var(--text-muted);
+		background: var(--subtle-fg); white-space: nowrap;
+		padding: var(--padding-sm) var(--padding-md);
+		border-top: none;
+	}
+	.production-processor table.pp-table td {
+		vertical-align: middle;
+		padding: var(--padding-sm) var(--padding-md);
+		border-top: 1px solid var(--border-color);
+		white-space: nowrap;
+	}
+	.production-processor table.pp-table th:first-child,
+	.production-processor table.pp-table td:first-child { padding-left: var(--padding-lg); }
+	.production-processor table.pp-table th:last-child,
+	.production-processor table.pp-table td:last-child { padding-right: var(--padding-lg); }
+	.production-processor tr.pp-group td {
+		background: var(--subtle-accent);
+		font-weight: 600;
+		color: var(--heading-color);
+	}
+	.production-processor tr.pp-done td:not(.pp-action) { color: var(--text-muted); }
+	.production-processor tr.pp-running td { background: var(--bg-blue); }
+	.production-processor .pp-seq {
+		display: inline-flex; align-items: center; justify-content: center;
+		width: 22px; height: 22px; border-radius: 50%;
+		font-size: var(--text-xs); background: var(--bg-gray); color: var(--text-on-gray);
+	}
+	.production-processor tr.pp-done .pp-seq { background: var(--bg-green); color: var(--text-on-green); }
+	.production-processor tr.pp-running .pp-seq { background: var(--card-bg); color: var(--text-on-blue); }
+	.production-processor .pp-control .form-group { margin-bottom: 0; }
+	.production-processor .pp-control { min-width: 160px; }
+	.production-processor .pp-qty-control { width: 110px; display: inline-block; }
+	.production-processor .pp-qty-control input { text-align: right; }
+	.production-processor .pp-elapsed { font-variant-numeric: tabular-nums; font-size: var(--text-xs); color: var(--text-on-blue); margin-top: 2px; }
+	.production-processor .pp-empty { padding: var(--padding-xl); text-align: center; color: var(--text-muted); }
+	.production-processor .pp-num { text-align: right; white-space: nowrap; }
+	.production-processor .pp-action { text-align: right; white-space: nowrap; }
+	.production-processor .pp-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+	.production-processor .pp-actions .btn { min-width: 64px; }
+
+	/* RM Processing dialog (styles only: content is built by the tabs) */
+	.pp-rm-dialog .modal-dialog { max-width: min(1320px, 96vw); }
+	.pp-rm-dialog .modal-body { padding: var(--padding-md) var(--padding-lg) var(--padding-lg); }
+	.pp-rm-dialog .frappe-control[data-fieldname="process"] { max-width: 360px; margin-bottom: var(--margin-md); }
+	.pp-rm-dialog .table-responsive {
+		border: 1px solid var(--border-color);
+		border-radius: var(--border-radius-md);
+		overflow: auto !important;
+		max-height: 65vh;
+	}
+	.pp-rm-dialog table.table-bordered { margin: 0; border: none; }
+	.pp-rm-dialog table.table-bordered th,
+	.pp-rm-dialog table.table-bordered td {
+		border-left: none; border-right: none;
+		border-color: var(--border-color);
+		padding: var(--padding-sm) 10px;
+		vertical-align: top;
+	}
+	.pp-rm-dialog table.table-bordered thead th {
+		position: sticky; top: 0; z-index: 1;
+		background: var(--subtle-fg);
+		border-top: none; border-bottom: 1px solid var(--border-color);
+		font-size: var(--text-sm); font-weight: 500; color: var(--text-muted);
+		white-space: nowrap;
+	}
+	.pp-rm-dialog table.table-bordered tbody tr:hover td { background: var(--subtle-accent); }
+	.pp-rm-dialog table.table-bordered td:nth-child(1),
+	.pp-rm-dialog table.table-bordered td:nth-child(2) { white-space: nowrap; }
+	.pp-rm-dialog table.table-bordered td strong { color: var(--heading-color); font-weight: 600; }
+	.pp-rm-dialog table.table-bordered td .small { font-size: var(--text-xs); line-height: 1.5; }
+	.pp-rm-dialog .rm-bom-control { min-width: 230px; }
+	.pp-rm-dialog table.table-bordered td:nth-child(3) strong,
+	.pp-rm-dialog table.table-bordered td:nth-child(4) strong { white-space: nowrap; }
+	.pp-rm-dialog .rm-bom-control .form-group,
+	.pp-rm-dialog td .frappe-control { margin-bottom: 0; }
+	.pp-rm-dialog .rm-components { min-width: 170px; }
+	.pp-rm-dialog .rm-components > div {
+		padding: 4px 8px;
+		margin-bottom: 4px !important;
+		border-radius: var(--border-radius-sm);
+		background: var(--subtle-fg);
+		font-size: var(--text-sm);
+	}
+	.pp-rm-dialog .rm-components > div:last-child { margin-bottom: 0 !important; }
+	.pp-rm-dialog td input.form-control { min-width: 110px; text-align: right; }
+	.pp-rm-dialog td .btn { white-space: nowrap; }
+	.pp-rm-dialog td .btn .fa { margin-right: 4px; }
+	.pp-rm-dialog .alert { border-radius: var(--border-radius-md); margin: 0; }
+`;
 
 class ProductionProcessor {
 	constructor(page) {
 		this.page = page;
 		this.rows = [];
 
+		if (!document.getElementById("production-processor-style")) {
+			$(`<style id="production-processor-style">${PP_STYLE}</style>`).appendTo("head");
+		}
+
 		this.wrapper = $(`
-			<div class="production-processor container-fluid py-4"></div>
+			<div class="production-processor"></div>
 		`).appendTo(this.page.body);
+
+		this.page.add_inner_button(__("RM Processing"), () => this.open_rm_processing());
 
 		this.make_filters();
 		this.make_dashboard();
 		this.make_employee_section();
 		this.make_table();
-		this.bind_events();
+		this.start_clock();
 	}
 
+	// ---------------------------------------------------------------
+	// Layout
+	// ---------------------------------------------------------------
+
 	make_filters() {
-		let row = $(`
-			<div class="row g-3 align-items-center mb-4">
-				<div class="col-lg-5 production-plan"></div>
-
-				<div class="col-lg-5 operation"></div>
-
-				<div class="col-lg-2">
-					<button class="btn btn-primary w-100 load-btn">
-						Load
+		const row = $(`
+			<div class="pp-card pp-filters">
+				<div class="pp-filter production-plan"></div>
+				<div class="pp-filter operation"></div>
+				<div class="pp-filter-actions">
+					<button class="btn btn-primary btn-sm pp-load-btn">
+						${frappe.utils.icon("refresh", "xs")} ${__("Load")}
 					</button>
 				</div>
 			</div>
@@ -43,8 +224,10 @@ class ProductionProcessor {
 			parent: row.find(".production-plan"),
 			df: {
 				fieldtype: "Link",
-				label: "Production Plan",
-				options: "Production Plan"
+				label: __("Production Plan"),
+				options: "Production Plan",
+				reqd: 1,
+				get_query: () => ({ filters: { docstatus: 1 } })
 			},
 			render_input: true
 		});
@@ -53,680 +236,462 @@ class ProductionProcessor {
 			parent: row.find(".operation"),
 			df: {
 				fieldtype: "Link",
-				label: "Operation",
-				options: "Operation"
+				label: __("Operation"),
+				options: "Operation",
+				placeholder: __("All Operations")
 			},
 			render_input: true
 		});
 
-		row.find(".load-btn").on("click", () => {
-			this.load_data();
-		});
+		row.find(".pp-load-btn").on("click", () => this.load_data());
 	}
 
 	make_dashboard() {
-		this.dashboard = $(`
-		<div class="mb-4">
-
-			<div class="d-flex justify-content-between align-items-center mb-3">
-				<h5 class="mb-0">Production Summary</h5>
+		this.dashboard_section = $(`
+			<div class="pp-section" style="display: none">
+				<div class="pp-section-title">${__("Production Summary")}</div>
+				<div class="pp-summary"></div>
 			</div>
+		`).appendTo(this.wrapper);
 
-			<div class="row dashboard-cards g-3"></div>
-
-		</div>
-	`).appendTo(this.wrapper);
-
-		this.dashboard_cards = this.dashboard.find(".dashboard-cards");
-	}
-
-
-	render_dashboard(rows) {
-
-		this.dashboard_cards.empty();
-
-		if (!rows || !rows.length) {
-			this.dashboard_cards.html(`
-			<div class="col-12">
-				<div class="text-center text-muted py-5">
-					No Job Cards Found
-				</div>
-			</div>
-		`);
-			return;
-		}
-
-		const summary = {};
-
-		rows.forEach(row => {
-
-			if (!summary[row.item_name]) {
-				summary[row.item_name] = {
-					item_name: row.item_name,
-					qty: 0,
-					completed: 0,
-					pending: 0
-				};
-			}
-
-			summary[row.item_name].qty += flt(row.for_quantity);
-			summary[row.item_name].completed += flt(row.total_completed_qty);
-
-		});
-
-		Object.values(summary).forEach(item => {
-
-			item.pending = Math.max(0, item.qty - item.completed);
-
-			this.add_card(item);
-		});
-	}
-
-
-	add_card(item) {
-
-		$(`
-		<div class="col-xl-3 col-lg-4 col-md-6">
-
-			<div class="card shadow-sm border-0 h-100">
-
-				<div class="card-body">
-
-					<h6 class="fw-bold mb-3">
-						${item.item_name}
-					</h6>
-
-					<div class="row text-center">
-
-						<div class="col">
-							<div class="small text-muted">
-								WO Qty
-							</div>
-
-							<div class="fs-4 fw-bold">
-								${item.qty}
-							</div>
-						</div>
-
-						<div class="col">
-							<div class="small text-muted">
-								Completed
-							</div>
-
-							<div class="fs-4 fw-bold text-success">
-								${item.completed}
-							</div>
-						</div>
-
-						<div class="col">
-							<div class="small text-muted">
-								Pending
-							</div>
-
-							<div class="fs-4 fw-bold text-warning">
-								${item.pending}
-							</div>
-						</div>
-
-					</div>
-
-				</div>
-
-			</div>
-
-		</div>
-	`).appendTo(this.dashboard_cards);
-
+		this.dashboard = this.dashboard_section.find(".pp-summary");
 	}
 
 	make_employee_section() {
-		this.employee_section = $(`
-		<div class="card mb-4">
-
-			<div class="card-body">
-
-				<div class="row align-items-end">
-
-					<div class="col-lg-4 employee-field"></div>
-
-					<div class="col-lg-8">
-
-						<div class="alert alert-info py-2 mb-0">
-
-							<strong>Tip:</strong>
-							Select an employee here to automatically fill
-							all <strong>Open</strong> Job Cards.
-
-						</div>
-
-					</div>
-
+		const section = $(`
+			<div class="pp-card pp-filters pp-employee-section">
+				<div class="pp-filter employee"></div>
+				<div class="pp-tip">
+					${__("Select an employee here to fill it on every Job Card that can be started.")}
 				</div>
-
 			</div>
-
-		</div>
-	`).appendTo(this.wrapper);
+		`).appendTo(this.wrapper);
 
 		this.employee = frappe.ui.form.make_control({
-			parent: this.employee_section.find(".employee-field"),
+			parent: section.find(".employee"),
 			df: {
 				fieldtype: "Link",
-				label: "Employee (Apply to All)",
+				label: __("Employee (apply to all)"),
 				options: "Employee",
-				placeholder: "Select Employee",
-				change: () => {
-					this.apply_employee_to_all();
-				}
+				change: () => this.apply_employee_to_all()
 			},
 			render_input: true
-		});
-
-		this.employee.refresh();
-
-		this.employee.$input.on("change", () => {
-			const employee = this.employee.get_value();
-
-			this.rows.forEach(row => {
-				if (row.status === "Open" && row.employee_control) {
-					row.employee_control.set_value(employee);
-				}
-			});
 		});
 	}
 
 	make_table() {
 		this.table = $(`
-		<div class="card">
-
-		 <div class="card-header d-flex justify-content-between align-items-center">
-            
-            <span>
-                ${__("Job Cards")}
-            </span>
-
-            <button type="button"
-                class="btn btn-sm btn-primary rm-processing-btn"
-            >
-                ${__("RM Processing")}
-            </button>
-
-        </div>
-
-			<div class="table-responsive" style="overflow:visible;">
-
-				<table class="table table-hover align-middle mb-0">
-
-					<thead>
-
-						<tr>
-							<th class="text-center" style="width:160px">Job Card</th>
-							<th class="text-center" style="width:160px">Operation</th>
-							<th class="text-center" style="width:160px">Work Order</th>
-							<th class="text-center">Item</th>
-							<th class="text-center" style="width:220px">Employee</th>
-							<th class="text-center" style="width:100px">
-								Job Qty
-							</th>
-
-							<th class="text-center" style="width:120px">
-								Recd Qty
-							</th>
-							<th class="text-center" style="width:120px">Status</th>
-							<th class="text-center" style="width:120px" class="text-center">
-								Action
-							</th>
-						</tr>
-
-					</thead>
-
-					<tbody></tbody>
-
-				</table>
-
+			<div class="pp-card">
+				<div class="pp-table-head">
+					<span class="pp-table-title">${__("Job Cards")}</span>
+					<span class="pp-muted pp-count"></span>
+				</div>
+				<div class="table-responsive">
+					<table class="table pp-table">
+						<thead>
+							<tr>
+								<th style="width: 44px">#</th>
+								<th>${__("Operation")}</th>
+								<th>${__("Job Card")}</th>
+								<th style="width: 230px">${__("Employee")}</th>
+								<th class="pp-num">${__("Job Qty")}</th>
+								<th class="pp-num" style="width: 150px">${__("Recd Qty")}</th>
+								<th style="width: 150px">${__("Status")}</th>
+								<th class="pp-action" style="width: 170px">${__("Action")}</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
 			</div>
-
-		</div>
-	`).appendTo(this.wrapper);
+		`).appendTo(this.wrapper);
 
 		this.tbody = this.table.find("tbody");
+		this.render_empty(__("Select a Production Plan to see its Job Cards."));
 	}
 
+	render_empty(message) {
+		this.dashboard.empty();
+		this.dashboard_section.hide();
+		this.table.find(".pp-count").text("");
+		this.tbody.html(`
+			<tr><td colspan="8" class="pp-empty">${message}</td></tr>
+		`);
+	}
 
-	render_table(rows) {
+	// ---------------------------------------------------------------
+	// Data
+	// ---------------------------------------------------------------
 
-		const status_order = {
-			"Work In Progress": 1,
-			"Open": 2,        // displayed as Ready
-			"On Hold": 3,
-			"Completed": 4,
-			"Cancelled": 5
-		};
+	load_data() {
+		const production_plan = this.production_plan.get_value();
 
-		rows.sort((a, b) => {
-			return (
-				(status_order[a.status] || 99) -
-				(status_order[b.status] || 99)
-			);
+		if (!production_plan) {
+			this.rows = [];
+			this.render_empty(__("Select a Production Plan to see its Job Cards."));
+			return;
+		}
+
+		return frappe.call({
+			method: "ec_production.api.production_processor.load_job_cards",
+			args: {
+				production_plan,
+				operation: this.operation.get_value()
+			},
+			freeze: true,
+			freeze_message: __("Loading Job Cards..."),
+			callback: (r) => {
+				this.rows = r.message || [];
+				this.render();
+			}
+		});
+	}
+
+	render() {
+		if (!this.rows.length) {
+			this.render_empty(__("No Job Cards found for this Production Plan."));
+			return;
+		}
+
+		this.render_dashboard();
+		this.render_table();
+		this.apply_employee_to_all();
+		this.tick();
+	}
+
+	group_by_work_order() {
+		// Rows already come in Work Order, then operation order
+		const groups = [];
+		const index = {};
+
+		this.rows.forEach(row => {
+			if (!(row.work_order in index)) {
+				index[row.work_order] = groups.length;
+				groups.push({
+					work_order: row.work_order,
+					item_code: row.item_code,
+					item_name: row.item_name,
+					wo_qty: flt(row.wo_qty),
+					produced_qty: flt(row.wo_produced_qty),
+					wo_status: row.wo_status,
+					rows: []
+				});
+			}
+			groups[index[row.work_order]].rows.push(row);
 		});
 
+		return groups;
+	}
+
+	// ---------------------------------------------------------------
+	// Summary: one card per Work Order, with its operations in order
+	// ---------------------------------------------------------------
+
+	render_dashboard() {
+		this.dashboard.empty();
+		this.dashboard_section.show();
+
+		this.group_by_work_order().forEach(group => {
+			const operations = [];
+			const by_operation = {};
+
+			group.rows.forEach(row => {
+				if (!(row.operation in by_operation)) {
+					by_operation[row.operation] = operations.length;
+					operations.push({ operation: row.operation, done: 0, running: false });
+				}
+				const op = operations[by_operation[row.operation]];
+				op.done += flt(row.total_completed_qty);
+				op.running = op.running || !!row.is_timer_running;
+			});
+
+			const wo_qty = group.wo_qty || 1;
+			const percent = Math.min(100, Math.round((group.produced_qty / wo_qty) * 100));
+
+			const steps = operations.map((op, i) => {
+				let cls = "";
+				let icon = "";
+				if (op.done >= group.wo_qty) {
+					cls = "done";
+					icon = "✓";
+				} else if (op.running) {
+					cls = "active";
+					icon = "●";
+				} else if (op.done > 0) {
+					cls = "partial";
+				}
+				return `
+					<span class="pp-step ${cls}" title="${frappe.utils.escape_html(op.operation)}: ${format_qty(op.done)} / ${format_qty(group.wo_qty)}">
+						${icon} ${i + 1}. ${frappe.utils.escape_html(op.operation)}
+						<span>${format_qty(op.done)}/${format_qty(group.wo_qty)}</span>
+					</span>
+				`;
+			}).join("");
+
+			$(`
+				<div class="pp-card pp-wo-card">
+					<div class="pp-wo-head">
+						<div>
+							<div class="pp-wo-item">${frappe.utils.escape_html(group.item_code || "")}</div>
+							<div class="pp-muted">${frappe.utils.escape_html(group.item_name && group.item_name !== group.item_code ? group.item_name : "")}</div>
+						</div>
+						<div class="text-right">
+							<a class="pp-muted" href="/app/work-order/${encodeURIComponent(group.work_order)}" target="_blank">
+								${frappe.utils.escape_html(group.work_order)}
+							</a>
+							<div class="pp-muted">${frappe.utils.escape_html(__(group.wo_status || ""))}</div>
+						</div>
+					</div>
+
+					<div class="pp-stats">
+						<div>
+							<div class="pp-muted">${__("WO Qty")}</div>
+							<div class="pp-stat-value">${format_qty(group.wo_qty)}</div>
+						</div>
+						<div>
+							<div class="pp-muted">${__("Produced")}</div>
+							<div class="pp-stat-value text-success">${format_qty(group.produced_qty)}</div>
+						</div>
+						<div>
+							<div class="pp-muted">${__("Pending")}</div>
+							<div class="pp-stat-value text-warning">${format_qty(Math.max(0, group.wo_qty - group.produced_qty))}</div>
+						</div>
+					</div>
+
+					<div class="progress pp-progress">
+						<div class="progress-bar bg-success" style="width: ${percent}%"></div>
+					</div>
+
+					<div class="pp-steps">${steps}</div>
+				</div>
+			`).appendTo(this.dashboard);
+		});
+	}
+
+	// ---------------------------------------------------------------
+	// Table: grouped by Work Order, operations in Work Order order
+	// ---------------------------------------------------------------
+
+	render_table() {
 		this.tbody.empty();
 
-		if (!rows.length) {
+		const running = this.rows.filter(r => r.is_timer_running).length;
+		const open = this.rows.filter(r => r.docstatus === 0).length;
+		this.table.find(".pp-count").text(
+			__("{0} Job Cards · {1} open · {2} running", [this.rows.length, open, running])
+		);
 
+		this.group_by_work_order().forEach(group => {
 			this.tbody.append(`
-			<tr>
-				<td colspan="8" class="text-center text-muted py-5">
-					No Job Cards Found
-				</td>
-			</tr>
-		`);
+				<tr class="pp-group">
+					<td colspan="8">
+						<a href="/app/work-order/${encodeURIComponent(group.work_order)}" target="_blank">
+							${frappe.utils.escape_html(group.work_order)}
+						</a>
+						<span class="pp-muted"> · ${frappe.utils.escape_html(group.item_code || "")}
+							· ${__("Qty")} ${format_qty(group.wo_qty)}</span>
+					</td>
+				</tr>
+			`);
 
-			return;
-		}
+			let seq = 0;
+			let last_operation = null;
 
-		rows.forEach(row => {
-
-			const tr = $(`
-			<tr>
-
-				<td class="text-center align-middle">
-					${row.job_card} 
-				</td>
-
-				<td class="text-center align-middle">
-					${row.operation}
-				</td>
-
-				<td class="text-center align-middle">
-					${row.work_order}
-				</td>
-
-				<td class="text-center align-middle">
-					${row.item_name}
-				</td>
-
-				<td class="employee-cell"></td>
-
-				<td class="text-center align-middle">
-					${frappe.format(row.for_quantity, {
-				fieldtype: "Float"
-			})}
-				</td>
-
-				<td class="text-center align-middle received-qty-cell"></td>
-
-				<td class="text-center align-middle">
-					${this.render_status(row)}
-				</td>
-
-				<td class="text-center align-middle action-cell"></td>
-
-			</tr>
-		`);
-
-			this.tbody.append(tr);
-
-			this.create_employee_control(
-				tr.find(".employee-cell"),
-				row
-			);
-
-			this.create_received_qty_control(
-				tr.find(".received-qty-cell"),
-				row
-			);
-
-			this.create_action(
-				tr.find(".action-cell"),
-				row
-			);
-
+			group.rows.forEach(row => {
+				// Split Job Cards of the same operation share its number
+				if (row.operation !== last_operation) {
+					seq += 1;
+					last_operation = row.operation;
+				}
+				this.render_row(row, seq);
+			});
 		});
 	}
 
-	render_status(row) {
+	render_row(row, seq) {
+		row.employee_control = null;
+		row.qty_control = null;
 
-		// Running timer
-		if (row.status === "Open" && row.is_timer_running) {
-			return `
-			<span class="badge rounded-pill bg-info-subtle text-info border">
-				<i class="fa fa-clock-o me-1"></i>
-				Running
-			</span>
-		`;
-		}
+		const state = get_row_state(row);
 
-		const map = {
-			"Open": {
-				color: "warning",
-				icon: "🟡",
-				text: "Ready"
-			},
+		const tr = $(`
+			<tr class="${state === "done" ? "pp-done" : ""} ${state === "running" ? "pp-running" : ""}">
+				<td><span class="pp-seq">${seq}</span></td>
+				<td>${frappe.utils.escape_html(row.operation || "")}</td>
+				<td>
+					<a href="/app/job-card/${encodeURIComponent(row.job_card)}" target="_blank">
+						${frappe.utils.escape_html(row.job_card)}
+					</a>
+				</td>
+				<td class="pp-employee"></td>
+				<td class="pp-num">${this.render_job_qty(row)}</td>
+				<td class="pp-num pp-recd"></td>
+				<td>${this.render_status(row, state)}</td>
+				<td class="pp-action"></td>
+			</tr>
+		`).appendTo(this.tbody);
 
-			"On Hold": {
-				color: "secondary",
-				icon: "🟣",
-				text: "On Hold"
-			},
-
-			"Completed": {
-				color: "success",
-				icon: "🟢",
-				text: "Completed"
-			},
-
-			"Cancelled": {
-				color: "danger",
-				icon: "🔴",
-				text: "Cancelled"
-			}
-		};
-
-		const s = map[row.status] || {
-			color: "secondary",
-			icon: "⚪",
-			text: row.status
-		};
-
-		return `
-		<span class="badge rounded-pill bg-${s.color}-subtle text-${s.color} border">
-			${s.icon} ${s.text}
-		</span>
-	`;
+		this.render_employee(tr.find(".pp-employee"), row, state);
+		this.render_received_qty(tr.find(".pp-recd"), row, state);
+		this.render_action(tr.find(".pp-action"), row, state);
 	}
 
-	create_employee_control(parent, row) {
+	render_job_qty(row) {
+		const total = format_qty(row.for_quantity);
 
-		parent.addClass("text-center");
+		if (row.docstatus === 0 && flt(row.total_completed_qty) > 0) {
+			return `${total}<div class="pp-muted">${__("{0} left", [format_qty(row.remaining_qty)])}</div>`;
+		}
 
-		if (row.status !== "Open") {
-			parent.html(row.employee_name || "-");
+		return total;
+	}
+
+	render_status(row, state) {
+		const map = {
+			running: ["blue", __("Running")],
+			paused: ["orange", __("On Hold")],
+			started: ["orange", __("In Progress")],
+			ready: ["gray", __("Ready")],
+			done: ["green", __("Completed")]
+		};
+
+		const [color, label] = map[state] || ["gray", __(row.status)];
+
+		let html = `<span class="indicator-pill ${color}">${label}</span>`;
+
+		if (state === "running") {
+			html += `<div class="pp-elapsed" data-start="${frappe.utils.escape_html(row.timer_started_at)}"></div>`;
+		}
+
+		return html;
+	}
+
+	render_employee(cell, row, state) {
+		if (state === "done" || state === "running") {
+			cell.html(frappe.utils.escape_html(row.employee_name || row.employee || "–"));
 			return;
 		}
 
-		const wrapper = $('<div class="d-flex justify-content-center"></div>').appendTo(parent);
+		const wrapper = $(`<div class="pp-control"></div>`).appendTo(cell);
 
-		const employee = frappe.ui.form.make_control({
+		row.employee_control = frappe.ui.form.make_control({
 			parent: wrapper,
 			df: {
 				fieldtype: "Link",
 				options: "Employee",
-				placeholder: "Employee"
+				placeholder: __("Employee")
 			},
+			only_input: true,
 			render_input: true
 		});
 
-		employee.set_value(row.employee);
-
-		row.employee_control = employee;
+		row.employee_control.set_value(row.employee || "");
 	}
 
-	create_received_qty_control(parent, row) {
-
-		parent.addClass("text-center align-middle");
-
-		// Show input while the timer is running
-		if (row.status === "Work In Progress") {
-
-			const wrapper = $('<div class="d-flex justify-content-center"></div>').appendTo(parent);
-
-			const qty = frappe.ui.form.make_control({
-				parent: wrapper,
-				df: {
-					fieldtype: "Float",
-					precision: 3
-				},
-				render_input: true
-			});
-
-			qty.refresh();
-			qty.set_value(row.for_quantity);
-
-			row.qty_control = qty;
+	render_received_qty(cell, row, state) {
+		// Qty is asked for whenever the card can be stopped
+		if (state !== "running" && state !== "paused") {
+			cell.html(format_qty(row.total_completed_qty));
 			return;
 		}
 
-		// Otherwise show completed quantity
-		parent.html(
-			frappe.format(row.total_completed_qty, {
-				fieldtype: "Float"
-			})
-		);
+		// A plain number input: the Float control pads values to the
+		// system precision (40 shows as 40.000)
+		const wrapper = $(`<div class="pp-control pp-qty-control"></div>`).appendTo(cell);
+		const $input = $(`<input type="number" class="form-control input-xs" min="0" step="1">`)
+			.attr({ max: flt(row.remaining_qty), placeholder: __("Qty") })
+			.val(flt(row.remaining_qty, 3))
+			.appendTo(wrapper);
+
+		row.qty_control = {
+			$input,
+			get_value: () => flt($input.val())
+		};
+		cell.append(`<div class="pp-muted">${__("of {0}", [format_qty(row.remaining_qty)])}</div>`);
 	}
 
-	create_action(parent, row) {
-
-		parent.empty();
-
-		// Completed
-		if (row.status === "Completed") {
-
-			parent.html(`
-			<span class="text-success fw-semibold">
-				<i class="fa fa-check-circle me-1"></i>
-				Done
-			</span>
-		`);
-
+	render_action(cell, row, state) {
+		if (state === "done") {
+			cell.html(`<span class="text-success">${frappe.utils.icon("check", "sm")} ${__("Done")}</span>`);
 			return;
 		}
 
-		// Cancelled
-		if (row.status === "Cancelled") {
+		const group = $(`<div class="pp-actions"></div>`).appendTo(cell);
+		const add = (label, cls, handler) => {
+			const btn = $(`<button class="btn btn-sm ${cls}">${label}</button>`).appendTo(group);
+			btn.on("click", () => handler(btn));
+		};
 
-			parent.html(`
-			<span class="text-danger">
-				Cancelled
-			</span>
-		`);
-
+		// Running: Hold | Stop · On Hold: Resume | Stop · otherwise: Start
+		if (state === "running") {
+			add(__("Hold"), "btn-default", btn => this.hold_timer(row, btn));
+			add(__("Stop"), "btn-danger", btn => this.stop_timer(row, btn));
 			return;
 		}
 
-		const employee = row.employee_control;
-
-		const qty = row.qty_control;
-
-		// -----------------------------------------------------
-		// START
-		// -----------------------------------------------------
-
-		if (!row.is_timer_running) {
-
-			const btn = $(`
-			<button class="btn btn-success btn-sm rounded-pill px-3">
-				<i class="fa fa-play me-1"></i>
-				Start
-			</button>
-		`);
-
-			parent.append(btn);
-
-			btn.on("click", () => {
-
-				const emp = employee.get_value();
-
-				if (!emp) {
-					frappe.msgprint(__("Please select Employee"));
-					return;
-				}
-
-				btn.prop("disabled", true);
-
-				this.start_timer(row, emp).then(() => {
-					this.load_data();
-				});
-
-			});
-
+		if (state === "paused") {
+			add(__("Resume"), "btn-primary", btn => this.start_timer(row, btn));
+			add(__("Stop"), "btn-danger", btn => this.stop_timer(row, btn));
 			return;
 		}
 
-		// -----------------------------------------------------
-		// STOP
-		// -----------------------------------------------------
-
-		const btn = $(`
-		<button class="btn btn-danger btn-sm rounded-pill px-3">
-			<i class="fa fa-stop me-1"></i>
-			Stop
-		</button>
-	`);
-
-		parent.append(btn);
-
-		btn.on("click", () => {
-
-			const recd_qty = qty.get_value();
-
-			if (!recd_qty || recd_qty <= 0) {
-				frappe.msgprint(__("Please enter Received Qty"));
-				return;
-			}
-
-			btn.prop("disabled", true);
-
-			this.stop_timer(row, recd_qty).then(() => {
-				this.load_data();
-			});
-
-		});
-
+		add(__("Start"), "btn-primary", btn => this.start_timer(row, btn));
 	}
-
-
-	get_status_badge(status) {
-
-		switch (status) {
-
-			case "Open":
-				return "bg-warning text-dark";
-
-			case "Completed":
-				return "bg-success";
-
-			case "Cancelled":
-				return "bg-danger";
-
-			case "Work In Progress":
-				return "bg-info";
-
-			default:
-				return "bg-secondary";
-		}
-
-	}
-
-
-	bind_events() {
-
-		// Load Button
-		this.wrapper.find(".load-btn").on("click", () => {
-			this.load_data();
-		});
-
-		// Apply Employee To All
-		this.employee.$input.on("change", () => {
-			this.apply_employee_to_all();
-		});
-
-		this.wrapper
-			.find(".rm-processing-btn")
-			.on("click", () => {
-				this.open_rm_processing();
-			});
-	}
-
 
 	apply_employee_to_all() {
-
-		const employee = this.employee.get_value();
+		const employee = this.employee && this.employee.get_value();
 
 		if (!employee) {
 			return;
 		}
 
 		this.rows.forEach(row => {
-
-			if (
-				row.status === "Open" &&
-				row.employee_control
-			) {
+			if (row.employee_control) {
 				row.employee_control.set_value(employee);
 			}
-
 		});
-
 	}
 
+	// ---------------------------------------------------------------
+	// Running timers
+	// ---------------------------------------------------------------
 
-	load_data() {
+	start_clock() {
+		if (this.clock) {
+			return;
+		}
+		this.clock = setInterval(() => this.tick(), 1000);
+	}
 
-		const production_plan = this.production_plan.get_value();
-		const operation = this.operation.get_value();
+	tick() {
+		const now = moment(frappe.datetime.now_datetime());
 
-		if (!production_plan) {
-			frappe.msgprint(__("Please select Production Plan"));
+		this.tbody.find(".pp-elapsed").each(function () {
+			const start = $(this).attr("data-start");
+			if (!start) {
+				return;
+			}
+			const seconds = Math.max(0, now.diff(moment(start), "seconds"));
+			$(this).text(format_duration(seconds));
+		});
+	}
+
+	// ---------------------------------------------------------------
+	// Actions
+	// ---------------------------------------------------------------
+
+	start_timer(row, btn) {
+		const employee = row.employee_control && row.employee_control.get_value();
+
+		if (!employee) {
+			frappe.show_alert({ message: __("Please select an Employee for {0}", [row.job_card]), indicator: "orange" });
+			row.employee_control && row.employee_control.$input.focus();
 			return;
 		}
 
-		frappe.call({
-			method: "ec_production.api.production_processor.load_job_cards",
-			args: {
-				production_plan,
-				operation
-			},
-			freeze: true,
-			freeze_message: __("Loading Job Cards..."),
-
-			callback: (r) => {
-
-				this.rows = r.message || [];
-
-				this.render_dashboard(this.rows);
-				this.render_table(this.rows);
-
-			}
-		});
-
-	}
-
-	process_job(row, employee, qty) {
+		btn.prop("disabled", true);
 
 		frappe.call({
-			method: "ec_production.api.production_processor.process_job_timer",
-			args: {
-				job_card: row.job_card,
-				employee: employee,
-				qty: qty
-			},
-			freeze: true,
-			freeze_message: __("Processing Job Card..."),
-
-			callback: (r) => {
-				// console.log(r);
-
-				if (r.exc) {
-					return;
-				}
-
-				frappe.show_alert({
-					message: __("Job Card Processed"),
-					indicator: "green"
-				});
-
-				// Reload latest data
-				this.load_data();
-
-			}
-		});
-
-	}
-
-	start_timer(row, employee) {
-
-		return frappe.call({
 			method: "ec_production.api.production_processor.start_job_timer",
 			args: {
 				job_card: row.job_card,
@@ -734,44 +699,101 @@ class ProductionProcessor {
 			},
 			freeze: true,
 			freeze_message: __("Starting Timer...")
+		}).then(() => {
+			frappe.show_alert({ message: __("{0} started", [row.job_card]), indicator: "blue" });
+		}).always(() => {
+			this.load_data();
 		});
-
 	}
 
+	hold_timer(row, btn) {
+		btn.prop("disabled", true);
 
-	stop_timer(row, qty) {
-
-		return frappe.call({
-			method: "ec_production.api.production_processor.stop_job_timer",
+		frappe.call({
+			method: "ec_production.api.production_processor.hold_job_timer",
 			args: {
-				job_card: row.job_card,
-				qty
+				job_card: row.job_card
 			},
 			freeze: true,
-			freeze_message: __("Stopping Timer...")
+			freeze_message: __("Putting On Hold...")
+		}).then(() => {
+			frappe.show_alert({ message: __("{0} is On Hold", [row.job_card]), indicator: "orange" });
+		}).always(() => {
+			this.load_data();
 		});
-
 	}
 
+	stop_timer(row, btn) {
+		const qty = flt(row.qty_control && row.qty_control.get_value());
+		const remaining = flt(row.remaining_qty);
 
-	refresh_row(updated_row) {
-
-		const index = this.rows.findIndex(
-			d => d.job_card === updated_row.job_card
-		);
-
-		if (index === -1) {
+		if (qty <= 0) {
+			frappe.show_alert({ message: __("Please enter Received Qty for {0}", [row.job_card]), indicator: "orange" });
+			row.qty_control && row.qty_control.$input.focus();
 			return;
 		}
 
-		this.rows[index] = {
-			...this.rows[index],
-			...updated_row
+		if (qty > remaining) {
+			frappe.msgprint({
+				title: __("Qty Exceeds Job Card"),
+				message: __("Received Qty {0} cannot be more than the {1} left on {2}.", [
+					format_qty(qty), format_qty(remaining), row.job_card
+				]),
+				indicator: "red"
+			});
+			return;
+		}
+
+		const submit = () => {
+			btn.prop("disabled", true);
+
+			frappe.call({
+				method: "ec_production.api.production_processor.stop_job_timer",
+				args: {
+					job_card: row.job_card,
+					qty
+				},
+				freeze: true,
+				freeze_message: __("Completing Job Card...")
+			}).then((r) => {
+				const result = r.message || {};
+
+				let message = __("{0} completed", [row.job_card]);
+				if (result.new_job_card) {
+					message += " · " + __("{0} created for the rest", [result.new_job_card]);
+				}
+				frappe.show_alert({ message, indicator: "green" }, 7);
+
+				if (result.stock_entry) {
+					frappe.show_alert({
+						message: __("Manufacture Stock Entry {0} created", [result.stock_entry]),
+						indicator: "green"
+					}, 7);
+				}
+
+				if (result.stock_entry_error) {
+					frappe.msgprint({
+						title: __("Stock Entry not created"),
+						message: result.stock_entry_error,
+						indicator: "orange"
+					});
+				}
+			}).always(() => {
+				this.load_data();
+			});
 		};
 
-		this.render_dashboard(this.rows);
-		this.render_table(this.rows);
+		if (qty < remaining) {
+			frappe.confirm(
+				__("{0} of {1} will be completed on {2}, and a new Job Card will be created for the remaining {3}. Continue?", [
+					format_qty(qty), format_qty(remaining), row.job_card, format_qty(remaining - qty)
+				]),
+				submit
+			);
+			return;
+		}
 
+		submit();
 	}
 
 
@@ -803,6 +825,7 @@ class ProductionProcessor {
 			size: "extra-large",
 		});
 
+		dialog.$wrapper.addClass("pp-rm-dialog");
 		dialog.show();
 
 		const process_control = dialog.fields_dict.process;
@@ -1538,7 +1561,7 @@ class ProductionProcessor {
 						class="form-control process-cut-qty"
 						data-index="${index}"
 						min="0"
-						step="0.001"
+						step="1"
 						placeholder="${__("Enter Qty")}"
 					>
 
@@ -1600,6 +1623,17 @@ class ProductionProcessor {
 
 				if (qty <= 0) {
 					frappe.msgprint(__("Please enter a valid quantity."));
+					return;
+				}
+
+				if (qty > flt(item.job_qty)) {
+					frappe.msgprint({
+						title: __("Qty Exceeds Job Qty"),
+						message: __("Qty {0} cannot be greater than the Job Qty {1} of {2}.", [
+							qty, flt(item.job_qty), item.job_card
+						]),
+						indicator: "red"
+					});
 					return;
 				}
 
@@ -1816,7 +1850,7 @@ class ProductionProcessor {
 						class="form-control rm-receive-qty"
 						data-index="${index}"
 						min="0"
-						step="0.001"
+						step="1"
 						placeholder="${__("Enter Qty")}"
 					>
 
@@ -1881,6 +1915,17 @@ class ProductionProcessor {
 					return;
 				}
 
+				if (qty > flt(item.job_qty)) {
+					frappe.msgprint({
+						title: __("Qty Exceeds Job Qty"),
+						message: __("Qty {0} cannot be greater than the Job Qty {1} of {2}.", [
+							qty, flt(item.job_qty), item.job_card
+						]),
+						indicator: "red"
+					});
+					return;
+				}
+
 				frappe.new_doc("Stock Entry", {}, (doc) => {
 
 					doc.stock_entry_type = "Material Transfer";
@@ -1927,4 +1972,36 @@ class ProductionProcessor {
 			});
 
 	}
+}
+
+
+// What a Job Card row can do now
+function get_row_state(row) {
+	if (row.docstatus === 1 || row.status === "Completed") {
+		return "done";
+	}
+	if (row.is_timer_running) {
+		return "running";
+	}
+	if (row.is_paused) {
+		return "paused";
+	}
+	if (flt(row.total_completed_qty) > 0) {
+		return "started";
+	}
+	return "ready";
+}
+
+function format_qty(value) {
+	const rounded = flt(value, 3);
+	const decimals = (String(rounded).split(".")[1] || "").length;
+	return format_number(rounded, null, decimals);
+}
+
+function format_duration(seconds) {
+	const h = Math.floor(seconds / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	const s = seconds % 60;
+	const pad = n => String(n).padStart(2, "0");
+	return `${h ? h + ":" : ""}${pad(m)}:${pad(s)}`;
 }

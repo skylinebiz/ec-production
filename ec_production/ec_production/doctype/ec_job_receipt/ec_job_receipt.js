@@ -51,11 +51,29 @@ async function calculate_amount(cdt, cdn) {
 }
 
 
+// The Job Order row a receipt row was matched to belongs to its old
+// Employee / Operation / Item / Lot: drop it whenever one of those
+// changes, so the server matches the row again on save.
+async function clear_job_order_link(cdt, cdn) {
+
+	const row = locals[cdt][cdn];
+
+	if (row.jod_id || row.job_order) {
+		await frappe.model.set_value(cdt, cdn, {
+			jod_id: "",
+			job_order: ""
+		});
+	}
+}
+
+
 async function update_rate_and_pending(cdt, cdn) {
 
 	const row = locals[cdt][cdn];
 
 	row.__pending = null;
+
+	await clear_job_order_link(cdt, cdn);
 
 	if (!(row.employee && row.operation && row.item && row.lot)) {
 		await frappe.model.set_value(cdt, cdn, "rate", "");
@@ -101,6 +119,7 @@ frappe.ui.form.on("EC Job Receipt Detail", {
 		row.allowed_items = [];
 		row.allowed_operations = [];
 
+		await clear_job_order_link(cdt, cdn);
 		await frappe.model.set_value(cdt, cdn, "item", "");
 		await frappe.model.set_value(cdt, cdn, "operation", "");
 		await frappe.model.set_value(cdt, cdn, "qty_received", "");
@@ -131,6 +150,7 @@ frappe.ui.form.on("EC Job Receipt Detail", {
 
 		row.allowed_operations = [];
 
+		await clear_job_order_link(cdt, cdn);
 		await frappe.model.set_value(cdt, cdn, "operation", "");
 		await frappe.model.set_value(cdt, cdn, "qty_received", "");
 		await frappe.model.set_value(cdt, cdn, "rate", "");
