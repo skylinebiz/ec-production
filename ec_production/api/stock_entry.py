@@ -8,6 +8,7 @@ from frappe import _
 EC_LOT_REQUIRED_TYPES = (
 	"Material Consumption for Manufacture",
 	"Material Transfer for Manufacture",
+	"Disassemble",
 )
 
 
