@@ -6,9 +6,8 @@ from frappe import _
 # marks the field mandatory on the form. `mandatory_depends_on` is a
 # client-side rule only, so it is enforced again here.
 EC_LOT_REQUIRED_TYPES = (
-	"Material Consumption for Manufacture",
-	"Material Transfer for Manufacture",
-	"Disassemble",
+	"Material Receipt",
+	"Material Issue",
 )
 
 
