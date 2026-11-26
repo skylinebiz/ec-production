@@ -22,85 +22,115 @@ def get_default_bom(item_code):
     )
 
 
+def _get_bom(bom_name, bom_cache):
+    """BOM documents are read many times while walking a plan; load each once."""
+
+    if bom_name not in bom_cache:
+        bom_cache[bom_name] = frappe.get_doc("BOM", bom_name)
+
+    return bom_cache[bom_name]
+
+
 def get_cutting_items_from_bom(
     bom_name,
     result,
-    visited,
+    path,
     source_item_code=None,
+    qty=1,
+    bom_cache=None,
 ):
+    """
+    Walk `bom_name` down through each component's default BOM and collect
+    the Cutting items into `result`, adding up the qty needed to make `qty`
+    of the BOM's item.
 
-    if not bom_name:
+    `path` holds the BOMs on the way down to this one, so only a real
+    circular BOM is cut short: the same sub-BOM reached from two plan items
+    (or twice in one tree) is walked each time, so both its "Used By" and
+    its qty are counted.
+    """
+
+    if not bom_name or bom_name in path:
         return
 
-    # Prevent circular BOM recursion
-    if bom_name in visited:
-        return
-
-    visited.add(bom_name)
-
-    bom = frappe.get_doc("BOM", bom_name)
+    bom_cache = {} if bom_cache is None else bom_cache
+    bom = _get_bom(bom_name, bom_cache)
 
     if bom.docstatus != 1:
         frappe.throw(
             _("BOM {0} must be submitted.").format(bom_name)
         )
 
-    for row in bom.items:
+    per_unit = flt(qty) / (flt(bom.quantity) or 1)
 
-        if not row.item_code:
-            continue
+    path.add(bom_name)
 
-        # Cutting Item
+    try:
+        for row in bom.items:
 
-        if row.operation == "Cutting":
+            if not row.item_code:
+                continue
 
-            item_code = row.item_code
+            row_qty = flt(row.stock_qty or row.qty) * per_unit
 
-            if item_code not in result:
+            # Cutting Item
 
-                result[item_code] = {
-                    "item_code": item_code,
-                    "item_name": frappe.db.get_value(
-                        "Item",
-                        item_code,
-                        "item_name",
-                    ),
-                    "source_items": [],
-                    "source_boms": [],
-                    "current_bom": get_default_bom(item_code),
-                }
+            if row.operation == "Cutting":
 
-            # Keep track of Production Plan items
-            if (
-                source_item_code
-                and source_item_code
-                not in result[item_code]["source_items"]
-            ):
-                result[item_code]["source_items"].append(
+                item_code = row.item_code
+
+                if item_code not in result:
+
+                    result[item_code] = {
+                        "item_code": item_code,
+                        "item_name": row.item_name or frappe.db.get_value(
+                            "Item",
+                            item_code,
+                            "item_name",
+                        ),
+                        "qty": 0,
+                        "source_items": [],
+                        "source_boms": [],
+                        "current_bom": get_default_bom(item_code),
+                    }
+
+                result[item_code]["qty"] += row_qty
+
+                # Keep track of Production Plan items
+                if (
                     source_item_code
-                )
+                    and source_item_code
+                    not in result[item_code]["source_items"]
+                ):
+                    result[item_code]["source_items"].append(
+                        source_item_code
+                    )
 
-            # Keep track of BOMs where this item was found
-            if (
-                bom_name
-                not in result[item_code]["source_boms"]
-            ):
-                result[item_code]["source_boms"].append(
+                # Keep track of BOMs where this item was found
+                if (
                     bom_name
+                    not in result[item_code]["source_boms"]
+                ):
+                    result[item_code]["source_boms"].append(
+                        bom_name
+                    )
+
+                continue
+
+            child_bom = row.bom_no or get_default_bom(row.item_code)
+
+            if child_bom:
+
+                get_cutting_items_from_bom(
+                    bom_name=child_bom,
+                    result=result,
+                    path=path,
+                    source_item_code=source_item_code,
+                    qty=row_qty,
+                    bom_cache=bom_cache,
                 )
-
-            continue
-
-        child_bom = get_default_bom(row.item_code)
-
-        if child_bom:
-
-            get_cutting_items_from_bom(
-                bom_name=child_bom,
-                result=result,
-                visited=visited,
-                source_item_code=source_item_code,
-            )
+    finally:
+        path.discard(bom_name)
 
 
 @frappe.whitelist()
@@ -114,9 +144,10 @@ def get_cutting_items(production_plan):
         "Production Plan",
         production_plan,
     )
+    pp.check_permission("read")
 
     result = {}
-    visited = set()
+    bom_cache = {}
 
     for pp_item in pp.po_items:
 
@@ -145,8 +176,10 @@ def get_cutting_items(production_plan):
         get_cutting_items_from_bom(
             bom_name=bom_name,
             result=result,
-            visited=visited,
+            path=set(),
             source_item_code=pp_item.item_code,
+            qty=flt(pp_item.planned_qty) or 1,
+            bom_cache=bom_cache,
         )
 
     return list(result.values())
@@ -154,9 +187,16 @@ def get_cutting_items(production_plan):
 
 @frappe.whitelist()
 def get_cutting_stock_entry_items(production_plan, cutting_items):
-    import json
+    """
+    Values for a new (unsaved) Manufacture Stock Entry for one cutting item.
+    A Manufacture entry has a single finished item, so the dialog sends one
+    item per call; the client opens the result as a new form to review.
+    """
 
-    cutting_items = json.loads(cutting_items or "[]")
+    cutting_items = frappe.parse_json(cutting_items or "[]")
+
+    if isinstance(cutting_items, dict):
+        cutting_items = [cutting_items]
 
     if not cutting_items:
         frappe.throw(_("No cutting items selected."))
@@ -167,6 +207,9 @@ def get_cutting_stock_entry_items(production_plan, cutting_items):
                 "Please process one cutting item at a time."
             )
         )
+
+    frappe.has_permission("Production Plan", "read", production_plan, throw=True)
+    frappe.has_permission("Stock Entry", "create", throw=True)
 
     item = cutting_items[0]
 
@@ -180,6 +223,13 @@ def get_cutting_stock_entry_items(production_plan, cutting_items):
     if not bom_no:
         frappe.throw(
             _("BOM is required for item {0}.").format(
+                frappe.bold(item_code)
+            )
+        )
+
+    if qty <= 0:
+        frappe.throw(
+            _("Qty for item {0} must be greater than zero.").format(
                 frappe.bold(item_code)
             )
         )
@@ -206,14 +256,6 @@ def get_cutting_stock_entry_items(production_plan, cutting_items):
             _("BOM {0} must be active and submitted.").format(bom_no)
         )
 
-    if qty <= 0:
-        qty = 1
-
-    production_plan_doc = frappe.get_doc(
-        "Production Plan",
-        production_plan
-    )
-
     stock_entry = frappe.new_doc("Stock Entry")
 
     # Native Manufacture entry
@@ -233,55 +275,68 @@ def get_cutting_stock_entry_items(production_plan, cutting_items):
 
     return stock_entry.as_dict()
 
+
 @frappe.whitelist()
 def get_rm_issue_items(production_plan):
+    """
+    The Cutting Job Cards (not cancelled) of this Production Plan's Work
+    Orders, each with the cut item found in its parent BOM and that cut
+    item's BOM components.
+    """
 
-    job_cards = frappe.get_all(
-        "Job Card",
-        filters={
-            "operation": "Cutting",
-            "docstatus": ["<", 2],
-        },
-        fields=[
-            "name",
-            "work_order",
-            "production_item",
-            "item_name",
-            "for_quantity",
-            "bom_no",
-        ],
-        order_by="creation asc",
+    if not production_plan:
+        frappe.throw(_("Production Plan is required."))
+
+    frappe.has_permission("Production Plan", "read", production_plan, throw=True)
+
+    # Only this plan's Job Cards, in one query (the plan is on the Work Order)
+    job_cards = frappe.db.sql(
+        """
+        SELECT
+            jc.name,
+            jc.work_order,
+            jc.production_item,
+            jc.item_name,
+            jc.for_quantity,
+            jc.bom_no,
+            wo.production_item AS wo_production_item,
+            wo.bom_no AS wo_bom_no
+        FROM `tabJob Card` jc
+        INNER JOIN `tabWork Order` wo
+            ON wo.name = jc.work_order
+        WHERE wo.production_plan = %s
+            AND jc.operation = 'Cutting'
+            AND jc.docstatus < 2
+        ORDER BY jc.creation ASC
+        """,
+        (production_plan,),
+        as_dict=True,
     )
+
+    if not job_cards:
+        return []
+
+    bom_cache = {}
+    item_cache = {}
+
+    def get_item_value(item_code, fieldname):
+        if item_code not in item_cache:
+            item_cache[item_code] = frappe.db.get_value(
+                "Item",
+                item_code,
+                ["item_name", "default_bom"],
+                as_dict=True,
+            ) or frappe._dict()
+
+        return item_cache[item_code].get(fieldname)
 
     rm_items = []
 
     for job_card in job_cards:
 
-        if not job_card.work_order:
-            continue
-
-        # Get Work Order
-
-        work_order_data = frappe.db.get_value(
-            "Work Order",
-            job_card.work_order,
-            [
-                "production_plan",
-                "production_item",
-                "bom_no",
-            ],
-            as_dict=True,
-        )
-
-        if not work_order_data:
-            continue
-
-        if work_order_data.production_plan != production_plan:
-            continue
-
         source_item = (
             job_card.production_item
-            or work_order_data.production_item
+            or job_card.wo_production_item
         )
 
         if not source_item:
@@ -290,23 +345,14 @@ def get_rm_issue_items(production_plan):
         # Parent BOM
         parent_bom_no = (
             job_card.bom_no
-            or work_order_data.bom_no
+            or job_card.wo_bom_no
+            or get_item_value(source_item, "default_bom")
         )
-
-        if not parent_bom_no:
-            parent_bom_no = frappe.db.get_value(
-                "Item",
-                source_item,
-                "default_bom",
-            )
 
         if not parent_bom_no:
             continue
 
-        parent_bom = frappe.get_doc(
-            "BOM",
-            parent_bom_no
-        )
+        parent_bom = _get_bom(parent_bom_no, bom_cache)
 
         # Find Cutting / Semi Finished Item
 
@@ -315,39 +361,29 @@ def get_rm_issue_items(production_plan):
             if not bom_item.item_code:
                 continue
 
-            cut_bom_no = bom_item.bom_no
-
-            if not cut_bom_no:
-                cut_bom_no = frappe.db.get_value(
-                    "Item",
-                    bom_item.item_code,
-                    "default_bom",
-                )
+            cut_bom_no = (
+                bom_item.bom_no
+                or get_item_value(bom_item.item_code, "default_bom")
+            )
 
             if not cut_bom_no:
                 continue
 
             # Get Cut Item BOM
 
-            cut_bom = frappe.get_doc(
-                "BOM",
-                cut_bom_no
-            )
+            cut_bom = _get_bom(cut_bom_no, bom_cache)
 
-            components = []
-
-            for cut_item in cut_bom.items:
-
-                if not cut_item.item_code:
-                    continue
-
-                components.append({
+            components = [
+                {
                     "item_code": cut_item.item_code,
                     "item_name": cut_item.item_name,
                     "qty": flt(cut_item.qty),
                     "uom": cut_item.uom,
                     "stock_uom": cut_item.stock_uom,
-                })
+                }
+                for cut_item in cut_bom.items
+                if cut_item.item_code
+            ]
 
             if not components:
                 continue
@@ -358,11 +394,7 @@ def get_rm_issue_items(production_plan):
                 "source_item": source_item,
                 "source_item_name": (
                     job_card.item_name
-                    or frappe.db.get_value(
-                        "Item",
-                        source_item,
-                        "item_name",
-                    )
+                    or get_item_value(source_item, "item_name")
                 ),
                 "cut_item_code": bom_item.item_code,
                 "cut_item_name": bom_item.item_name,

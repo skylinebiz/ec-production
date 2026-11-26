@@ -9,7 +9,64 @@ from frappe import _
 from ec_production.ec_production.doctype.ec_job_order.ec_job_order import sync_lot_item_rollups
 
 
+JOD_MATCH_FIELDS = [
+	"name", "parent", "qty", "rate", "docstatus",
+	"employee", "operation", "item", "lot",
+]
+
+
+def is_valid_jod_for_row(jod, row):
+	"""A Job Order Detail can back a receipt row only while it is
+	submitted and is for the same Employee / Operation / Item / Lot."""
+
+	return bool(
+		jod
+		and jod.docstatus == 1
+		and jod.employee == row.employee
+		and jod.operation == row.operation
+		and jod.item == row.item
+		and jod.lot == row.lot
+	)
+
+
 class ECJobReceipt(Document):
+	def _validate_links(self):
+		# Frappe checks links before validate() runs, so a draft still
+		# linked to a since-cancelled Job Order would be rejected with
+		# "Cannot link cancelled document" before it could be re-matched.
+		self.clear_stale_job_order_links()
+		super()._validate_links()
+
+	def clear_stale_job_order_links(self):
+		"""Drop JOD Id / Job Order on rows whose Job Order is no longer
+		submitted, or whose Employee / Operation / Item / Lot no longer
+		match that Job Order row (edited after the draft was first
+		matched), so _process_details() matches them again against the
+		submitted Job Orders (e.g. the amendment). Only while saving or
+		submitting; a submitted receipt's links are never touched."""
+
+		if getattr(self, "_action", None) in ("cancel", "update_after_submit"):
+			return
+
+		jod_ids = list({row.jod_id for row in self.job_receipt_details if row.jod_id})
+		if not jod_ids:
+			return
+
+		jods = {
+			d.name: d
+			for d in frappe.get_all(
+				"EC Job Order Detail",
+				filters={"name": ["in", jod_ids]},
+				fields=JOD_MATCH_FIELDS,
+				limit_page_length=0
+			)
+		}
+
+		for row in self.job_receipt_details:
+			if row.jod_id and not is_valid_jod_for_row(jods.get(row.jod_id), row):
+				row.jod_id = None
+				row.job_order = None
+
 	def validate(self):
 		# Lenient: can be saved as a draft even if a row can't yet be
 		# resolved/fully validated — that hard check only runs at
@@ -83,15 +140,16 @@ class ECJobReceipt(Document):
 
 	def _get_jod_for_row(self, row):
 		"""If a JOD Id is already attached (e.g. set by Job Order's
-		"Process Receipt" button), trust it directly rather than
-		re-searching — it's an exact, unambiguous match."""
+		"Process Receipt" button), use it directly rather than
+		re-searching — as long as it is still submitted and still for
+		this row's Employee / Operation / Item / Lot."""
 
 		if row.jod_id:
 
 			jod = frappe.db.get_value(
 				"EC Job Order Detail",
 				row.jod_id,
-				["name", "parent", "qty", "rate"],
+				JOD_MATCH_FIELDS,
 				as_dict=True
 			)
 
@@ -100,7 +158,17 @@ class ECJobReceipt(Document):
 					"Row #{0}: Invalid JOD Id <b>{1}</b>."
 				).format(row.idx, row.jod_id))
 
-			return jod
+			if is_valid_jod_for_row(jod, row):
+				return jod
+
+			# The Job Order this draft was matched to has since been
+			# cancelled (or amended), or the row was edited to another
+			# Employee / Operation / Item / Lot. Drop the stale link and
+			# match the row again against the submitted Job Orders;
+			# otherwise the receipt would credit the wrong Job Order (JOD
+			# Id / Job Order are read-only on the form).
+			row.jod_id = None
+			row.job_order = None
 
 		return self.resolve_jod(row)
 

@@ -8,6 +8,14 @@ from frappe import _
 
 
 class ECJobOrder(Document):
+	def before_insert(self):
+		# A new Job Order (duplicate or amendment) has no receipts yet; a
+		# copied Qty Received would show the rows as already received and
+		# understate the Lot's Pending Qty. Receipts are tied to the
+		# original rows' names, so nothing carries over.
+		for row in self.job_order_details:
+			row.qty_received = 0
+
 	def validate(self):
 		# Lenient: can be saved as a draft even if it would currently
 		# exceed the Lot's available capacity — that hard check only

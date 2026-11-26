@@ -36,7 +36,8 @@ async function open_cutting_dialog(frm) {
         return;
     }
 
-    // Build Table HTML
+    // Build Table HTML. A Manufacture Stock Entry has a single finished
+    // item, so each cutting item is processed on its own, from its row.
 
     let html = `
         <div class="cutting-items-table">
@@ -45,19 +46,11 @@ async function open_cutting_dialog(frm) {
 
                 <thead>
                     <tr>
-
-                        <th style="width: 25%;">
-                            ${__("Item")}
-                        </th>
-
-                        <th style="width: 25%;">
-                            ${__("Used By")}
-                        </th>
-
-                        <th style="width: 35%;">
-                            ${__("BOM")}
-                        </th>
-
+                        <th style="width: 24%;">${__("Item")}</th>
+                        <th style="width: 20%;">${__("Used By")}</th>
+                        <th style="width: 14%;">${__("Qty")}</th>
+                        <th style="width: 28%;">${__("BOM")}</th>
+                        <th style="width: 14%;"></th>
                     </tr>
                 </thead>
 
@@ -71,38 +64,39 @@ async function open_cutting_dialog(frm) {
 
                 <td class="align-middle">
                     <strong>
-                        ${frappe.utils.escape_html(
-                            item.item_code || ""
-                        )}
+                        ${frappe.utils.escape_html(item.item_code || "")}
                     </strong>
                     <br>
                     <small class="text-muted">
-                        ${frappe.utils.escape_html(
-                            item.item_name || ""
-                        )}
+                        ${frappe.utils.escape_html(item.item_name || "")}
                     </small>
                 </td>
 
                 <td class="align-middle">
-                    ${frappe.utils.escape_html(
-                        (item.source_items || []).join(", ")
-                    )}
+                    ${frappe.utils.escape_html((item.source_items || []).join(", "))}
                 </td>
 
                 <td>
+                    <div class="qty-field" data-index="${index}"></div>
+                </td>
 
-                    <div
-                        class="bom-field"
+                <td>
+                    <div class="bom-field" data-index="${index}"></div>
+                </td>
+
+                <td class="align-middle">
+                    <button
+                        class="btn btn-xs btn-primary process-cutting-item"
                         data-index="${index}"
-                    ></div>
-
+                    >
+                        ${__("Stock Entry")}
+                    </button>
                 </td>
 
             </tr>
         `;
 
     });
-
 
     html += `
                 </tbody>
@@ -111,7 +105,6 @@ async function open_cutting_dialog(frm) {
 
         </div>
     `;
-
 
     // Dialog
 
@@ -127,136 +120,151 @@ async function open_cutting_dialog(frm) {
             }
         ],
 
-        size: "large",
-
-        primary_action_label: __("Process Stock Entry"),
-
-        primary_action: async function () {
-            const selected_items = [];
-
-            for (let index = 0; index < cutting_items.length; index++) {
-                const item = cutting_items[index];
-
-                const bom_control =
-                    dialog[`bom_control_${index}`];
-
-                const bom_no =
-                    bom_control?.get_value()?.trim();
-
-                if (!bom_no) {
-                    frappe.msgprint({
-                        title: __("BOM Required"),
-                        message: __(
-                            "Select a BOM for {0} before processing.",
-                            [item.item_code]
-                        ),
-                        indicator: "red"
-                    });
-
-                    return;
-                }
-
-                selected_items.push({
-                    item_code: item.item_code,
-                    qty: flt(item.qty) || 1,
-                    bom_no: bom_no
-                });
-            }
-
-            if (!selected_items.length) {
-                return;
-            }
-
-            const r = await frappe.call({
-                method:
-                    "ec_production.api.prod_plan.get_cutting_stock_entry_items",
-
-                args: {
-                    production_plan: frm.doc.name,
-                    cutting_items: JSON.stringify(selected_items)
-                },
-
-                freeze: true,
-                freeze_message: __("Preparing Stock Entry...")
-            });
-
-            if (!r.message) {
-                return;
-            }
-
-            dialog.hide();
-
-            const stock_entry_data = r.message;
-
-            stock_entry_data.__islocal = 1;
-            stock_entry_data.docstatus = 0;
-
-            frappe.model.sync(stock_entry_data);
-
-            frappe.set_route(
-                "Form",
-                "Stock Entry",
-                stock_entry_data.name
-            );
-        }
-
+        size: "extra-large"
     });
 
     dialog.show();
 
-    // Create BOM Link Fields
+    const controls = [];
 
-    cutting_items.forEach(
-        (item, index) => {
+    // Create Qty / BOM fields
 
-            const wrapper =
-                dialog.$wrapper.find(
-                    `.bom-field[data-index="${index}"]`
-                );
+    cutting_items.forEach((item, index) => {
 
+        const qty_wrapper = dialog.$wrapper.find(`.qty-field[data-index="${index}"]`);
+        const bom_wrapper = dialog.$wrapper.find(`.bom-field[data-index="${index}"]`);
 
-            if (!wrapper.length) {
-                return;
-            }
-
-            const control =
-                frappe.ui.form.make_control({
-
-                    parent: wrapper[0],
-
-                    df: {
-                        fieldtype: "Link",
-                        fieldname: `bom_${index}`,
-                        options: "BOM",
-
-                        get_query: function () {
-                            return {
-                                filters: {
-                                    item: item.item_code,
-                                    docstatus: 1,
-                                    is_active: 1
-                                }
-                            };
-                        }
-                    },
-
-                    render_input: true
-
-                });
-
-            // Default BOM
-
-            if (item.current_bom) {
-                control.set_value(
-                    item.current_bom
-                );
-            }
-            // Store control on dialog
-            dialog[
-                `bom_control_${index}`
-            ] = control;
+        if (!qty_wrapper.length || !bom_wrapper.length) {
+            return;
         }
-    );
+
+        const qty = frappe.ui.form.make_control({
+            parent: qty_wrapper[0],
+            df: {
+                fieldtype: "Float",
+                fieldname: `qty_${index}`
+            },
+            render_input: true
+        });
+
+        // Default: what the plan needs of this cutting item
+        qty.set_value(flt(item.qty, 3));
+
+        const bom = frappe.ui.form.make_control({
+            parent: bom_wrapper[0],
+            df: {
+                fieldtype: "Link",
+                fieldname: `bom_${index}`,
+                options: "BOM",
+
+                get_query: function () {
+                    return {
+                        filters: {
+                            item: item.item_code,
+                            docstatus: 1,
+                            is_active: 1
+                        }
+                    };
+                }
+            },
+            render_input: true
+        });
+
+        // Default BOM
+        if (item.current_bom) {
+            bom.set_value(item.current_bom);
+        }
+
+        controls[index] = { qty, bom };
+    });
+
+    dialog.$wrapper.on("click", ".process-cutting-item", async function () {
+
+        const index = cint($(this).attr("data-index"));
+        const item = cutting_items[index];
+        const control = controls[index];
+
+        if (!item || !control) {
+            return;
+        }
+
+        const bom_no = (control.bom.get_value() || "").trim();
+        const qty = flt(control.qty.get_value());
+
+        if (!bom_no) {
+            frappe.msgprint({
+                title: __("BOM Required"),
+                message: __("Select a BOM for {0} before processing.", [item.item_code]),
+                indicator: "red"
+            });
+            return;
+        }
+
+        if (qty <= 0) {
+            frappe.msgprint({
+                title: __("Qty Required"),
+                message: __("Enter a Qty greater than zero for {0}.", [item.item_code]),
+                indicator: "red"
+            });
+            return;
+        }
+
+        const r = await frappe.call({
+            method: "ec_production.api.prod_plan.get_cutting_stock_entry_items",
+            args: {
+                production_plan: frm.doc.name,
+                cutting_items: JSON.stringify([{
+                    item_code: item.item_code,
+                    qty: qty,
+                    bom_no: bom_no
+                }])
+            },
+            freeze: true,
+            freeze_message: __("Preparing Stock Entry...")
+        });
+
+        if (!r.message) {
+            return;
+        }
+
+        dialog.hide();
+
+        open_new_stock_entry(r.message);
+    });
+}
+
+
+// The server returns the values of an unsaved Stock Entry; it has no
+// name, so build a proper new local document from them and open it.
+function open_new_stock_entry(values) {
+
+    const SKIP = [
+        "name", "doctype", "docstatus", "idx", "owner", "creation",
+        "modified", "modified_by", "parent", "parentfield", "parenttype",
+        "__islocal", "__unsaved"
+    ];
+
+    const copy = (target, source) => {
+        Object.keys(source).forEach(key => {
+            if (!SKIP.includes(key) && !Array.isArray(source[key])) {
+                target[key] = source[key];
+            }
+        });
+    };
+
+    frappe.model.with_doctype("Stock Entry", () => {
+
+        const stock_entry = frappe.model.get_new_doc("Stock Entry");
+
+        copy(stock_entry, values);
+
+        (values.items || []).forEach(item => {
+            const row = frappe.model.add_child(stock_entry, "items");
+            copy(row, item);
+        });
+
+        frappe.set_route("Form", "Stock Entry", stock_entry.name);
+    });
 }
 
 
